@@ -11,19 +11,9 @@ import {
 import Sidebar from '../components/Sidebar';
 import { cn } from '../lib/utils';
 import { useAppState } from '../state/AppStateContext';
-import { handleAction, toHistoryItem } from '../lib/mockActionEngine';
+import { handleAction, toHistoryItem } from '../lib/actionEngine';
 import { postActionWebhook } from '../lib/webhook';
-import type { DecisionLabel, MockActionResult } from '../types';
-
-function decisionFromRisk(score: number): DecisionLabel {
-  if (score < 30) {
-    return 'APPROVE';
-  }
-  if (score <= 70) {
-    return 'MODIFY';
-  }
-  return 'BLOCK';
-}
+import type { ActionResult } from '../types';
 
 function riskBadgeClass(score: number) {
   if (score < 30) {
@@ -38,7 +28,7 @@ function riskBadgeClass(score: number) {
 export default function DashboardPage() {
   const { actions, addAction, settings } = useAppState();
   const [input, setInput] = useState('');
-  const [action, setAction] = useState<MockActionResult | null>(null);
+  const [action, setAction] = useState<ActionResult | null>(null);
   const [isThinking, setIsThinking] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 

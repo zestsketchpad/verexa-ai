@@ -1,0 +1,173 @@
+import type { ActionHistoryItem, ActionResult, DecisionLabel, RiskLabel } from '../types';
+
+const DEFAULT_ACTION_WEBHOOK = 'https://xlr8-n8n.app.n8n.cloud/webhook/ai-action';
+
+function uid() {
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (typeof value === 'object' && value !== null) {
+    return value as Record<string, unknown>;
+  }
+  return null;
+}
+
+function asString(value: unknown): string | null {
+  if (typeof value === 'string' && value.trim()) {
+    return value;
+  }
+  return null;
+}
+
+function asNumber(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === 'string' && value.trim()) {
+    const num = Number(value);
+    if (Number.isFinite(num)) {
+      return num;
+    }
+  }
+  return null;
+}
+
+function asStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value
+    .map((entry) => (typeof entry === 'string' ? entry.trim() : ''))
+    .filter(Boolean);
+}
+
+function decisionFromRisk(score: number): DecisionLabel {
+  if (score < 30) {
+    return 'APPROVE';
+  }
+  if (score <= 70) {
+    return 'MODIFY';
+  }
+  return 'BLOCK';
+}
+
+function riskLevelFromScore(score: number): RiskLabel {
+  if (score < 30) {
+    return 'Low';
+  }
+  if (score <= 70) {
+    return 'Medium';
+  }
+  return 'High';
+}
+
+function normalizeDecision(value: unknown, riskScore: number): DecisionLabel {
+  const text = typeof value === 'string' ? value.toUpperCase().trim() : '';
+  if (text === 'APPROVE' || text === 'MODIFY' || text === 'BLOCK') {
+    return text;
+  }
+  return decisionFromRisk(riskScore);
+}
+
+function extractPayload(data: unknown): Record<string, unknown> {
+  if (Array.isArray(data)) {
+    const first = asRecord(data[0]);
+    if (first) {
+      return first;
+    }
+  }
+
+  const obj = asRecord(data);
+  if (!obj) {
+    throw new Error('Webhook response is not a valid object.');
+  }
+
+  const nested = asRecord(obj.action) ?? asRecord(obj.data);
+  return nested ?? obj;
+}
+
+function normalizeAction(input: string, data: unknown): ActionResult {
+  const payload = extractPayload(data);
+
+  const content = asString(payload.content) ?? asString(payload.output) ?? asString(payload.message);
+  if (!content) {
+    throw new Error('Webhook response missing "content".');
+  }
+
+  const riskScore = asNumber(payload.risk_score ?? payload.riskScore);
+  if (riskScore === null) {
+    throw new Error('Webhook response missing numeric "risk_score".');
+  }
+  const boundedRiskScore = Math.max(0, Math.min(100, riskScore));
+
+  const simulationPayload = asRecord(payload.simulation) ?? {};
+  const typeRaw = asString(payload.type)?.toLowerCase();
+  const type: ActionResult['type'] =
+    typeRaw === 'email' || typeRaw === 'code' || typeRaw === 'system' ? typeRaw : 'system';
+
+  return {
+    id: asString(payload.id) ?? uid(),
+    createdAt: asString(payload.createdAt) ?? new Date().toISOString(),
+    input,
+    type,
+    content,
+    risk_score: boundedRiskScore,
+    decision: normalizeDecision(payload.decision, boundedRiskScore),
+    issues: asStringArray(payload.issues),
+    improved_version:
+      asString(payload.improved_version) ?? asString(payload.improvedVersion) ?? content,
+    simulation: {
+      client_reaction: asString(simulationPayload.client_reaction) ?? '',
+      trust_impact: asString(simulationPayload.trust_impact) ?? '',
+      risk_level:
+        (asString(simulationPayload.risk_level) as RiskLabel | null) ??
+        riskLevelFromScore(boundedRiskScore),
+    },
+  };
+}
+
+export async function handleAction(input: string, webhookUrl?: string): Promise<ActionResult> {
+  const endpoint = (webhookUrl && webhookUrl.trim()) || DEFAULT_ACTION_WEBHOOK;
+
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      message: input,
+    }),
+  });
+
+  let data: unknown = null;
+  try {
+    data = await response.json();
+  } catch {
+    throw new Error('Webhook did not return JSON.');
+  }
+
+  if (!response.ok) {
+    const message =
+      (asRecord(data) && asString((data as Record<string, unknown>).message)) ||
+      `Webhook returned ${response.status}`;
+    throw new Error(message);
+  }
+
+  return normalizeAction(input, data);
+}
+
+export function toHistoryItem(
+  action: ActionResult,
+  status: ActionHistoryItem['status'],
+): ActionHistoryItem {
+  return {
+    id: action.id,
+    createdAt: new Date().toISOString(),
+    input: action.input,
+    type: action.type,
+    risk_score: action.risk_score,
+    decision: action.decision,
+    status,
+  };
+}

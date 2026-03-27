@@ -1,9 +1,9 @@
 import { FormEvent, useMemo, useState } from 'react';
 import { ArrowRight, Sparkles, Wand2 } from 'lucide-react';
 import Sidebar from '../components/Sidebar';
-import { handleAction, toHistoryItem } from '../lib/mockActionEngine';
+import { handleAction, toHistoryItem } from '../lib/actionEngine';
 import { postActionWebhook } from '../lib/webhook';
-import type { DecisionLabel, MockActionResult } from '../types';
+import type { ActionResult } from '../types';
 import { cn } from '../lib/utils';
 import { useAppState } from '../state/AppStateContext';
 
@@ -17,20 +17,10 @@ function riskColor(score: number) {
   return 'text-error border-error/20 bg-error/10';
 }
 
-function decisionFromRisk(score: number): DecisionLabel {
-  if (score < 30) {
-    return 'APPROVE';
-  }
-  if (score <= 70) {
-    return 'MODIFY';
-  }
-  return 'BLOCK';
-}
-
 export default function ActionsPage() {
   const { addAction, settings } = useAppState();
   const [input, setInput] = useState('');
-  const [action, setAction] = useState<MockActionResult | null>(null);
+  const [action, setAction] = useState<ActionResult | null>(null);
   const [isThinking, setIsThinking] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -53,7 +43,7 @@ export default function ActionsPage() {
     return '';
   }, [action, sendBlockedByRisk, sendBlockedByEmail]);
 
-  function onSubmit(event: FormEvent) {
+  async function onSubmit(event: FormEvent) {
     event.preventDefault();
     const value = input.trim();
     if (!value) {
@@ -63,19 +53,11 @@ export default function ActionsPage() {
     setIsThinking(true);
     setMessage(null);
 
-    setTimeout(() => {
-      const next = handleAction(value, settings);
+    try {
+      const next = await handleAction(value, settings.integrations.n8nWebhookUrl);
       setAction(next);
       addAction(toHistoryItem(next, 'Created'));
       setInput('');
-      setIsThinking(false);
-
-      void postActionWebhook({
-        webhookUrl: settings.integrations.n8nWebhookUrl,
-        event: 'chat_input',
-        input: value,
-        action: next,
-      });
 
       if (
         settings.execution.enableAutoExecution &&
@@ -87,19 +69,21 @@ export default function ActionsPage() {
         addAction(toHistoryItem(next, 'Executed'));
         setMessage('Auto-execution completed.');
       }
-    }, 250);
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : 'Webhook request failed.';
+      setMessage(`Action generation failed: ${detail}`);
+    } finally {
+      setIsThinking(false);
+    }
   }
 
   function onFix() {
     if (!action) {
       return;
     }
-    const reducedRisk = Math.max(0, action.risk_score - 15);
-    const fixed: MockActionResult = {
+    const fixed: ActionResult = {
       ...action,
       content: action.improved_version,
-      risk_score: reducedRisk,
-      decision: decisionFromRisk(reducedRisk),
     };
     setAction(fixed);
     addAction(toHistoryItem(fixed, 'Fixed'));
@@ -218,18 +202,19 @@ export default function ActionsPage() {
                 <input
                   value={input}
                   onChange={(event) => setInput(event.target.value)}
+                  disabled={isThinking}
                   className="flex-1 bg-transparent px-4 py-3 text-white text-sm outline-none placeholder:text-slate-600"
                   placeholder='Try: "Send delay email to client"'
                 />
                 <button
                   type="submit"
-                  disabled={isThinking}
+                  disabled={isThinking || !input.trim()}
                   className="w-10 h-10 rounded-full bg-primary text-on-primary flex items-center justify-center disabled:opacity-50"
                 >
                   <ArrowRight className="w-4 h-4" />
                 </button>
               </div>
-              {isThinking && <p className="text-xs text-slate-500 mt-2">Generating action...</p>}
+              {isThinking && <p className="text-xs text-slate-500 mt-2">Analyzing...</p>}
             </form>
           </section>
 
