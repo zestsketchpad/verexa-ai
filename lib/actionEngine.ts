@@ -191,10 +191,14 @@ export async function handleActionWithMeta(
   }
 
   if (data === null) {
-    const message =
-      truncate(rawBody) || 'empty response body';
+    const message = truncate(rawBody) || 'empty response body';
+    if (!rawBody.trim()) {
+      throw new Error(
+        `Webhook ${response.status} returned empty response body. In n8n set Webhook response mode to "Last node" or add a "Respond to Webhook" node that returns JSON.`,
+      );
+    }
     throw new Error(
-      `Webhook returned non-JSON response. Configure n8n to return JSON. Received: ${message}`,
+      `Webhook ${response.status} returned non-JSON response. Configure n8n to return JSON. Received: ${message}`,
     );
   }
 
