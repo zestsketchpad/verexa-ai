@@ -27,3 +27,32 @@ Import steps in n8n:
    - `userId`
    - `token`
    - `recipientEmail` (required for `tool=email`)
+
+Validate Input (Code node) reference:
+```javascript
+const body = $json.body || $json;
+const prompt = body.prompt || body.message;
+const tool = body.tool || (/email|mail|@/i.test(prompt || '') ? 'email' : 'research');
+const userId = body.userId || 'anonymous';
+const token = body.token || 'verixa-web';
+
+const emailMatch = (prompt || '').match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
+const recipientEmail = body.recipientEmail || body.email || (emailMatch ? emailMatch[0] : null);
+
+if (!prompt || !tool || !userId || !token) {
+  throw new Error('Missing required fields: prompt, tool, userId, token');
+}
+
+if (tool === 'email' && !recipientEmail) {
+  throw new Error('Missing recipientEmail for email tool');
+}
+
+return [{
+  prompt,
+  tool,
+  userId,
+  token,
+  recipientEmail: recipientEmail || null,
+  timestamp: new Date().toISOString(),
+}];
+```
