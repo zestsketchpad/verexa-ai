@@ -20,11 +20,12 @@ function riskColor(score: number) {
 
 export default function ActionsPage() {
   const { addAction, settings } = useAppState();
-  const { user } = useUser();
+  const { user, isLoaded } = useUser();
   const [input, setInput] = useState('');
   const [action, setAction] = useState<ActionResult | null>(null);
   const [isThinking, setIsThinking] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const sendBlockedByRisk =
     Boolean(action) && settings.policy.blockHighRiskActions && action.risk_score > 70;
@@ -45,21 +46,23 @@ export default function ActionsPage() {
     return '';
   }, [action, sendBlockedByRisk, sendBlockedByEmail]);
 
-  async function onSubmit(event: FormEvent) {
-    event.preventDefault();
-    const value = input.trim();
-    if (!value) {
-      return;
-    }
-
-    setIsThinking(true);
-    setMessage(null);
-
+  async function handleAction(inputValue: string) {
     try {
-      const next = await handleActionWithMeta(value, settings.integrations.n8nWebhookUrl, {
+      setIsThinking(true);
+      setError(null);
+      setSuccessMessage(null);
+
+      const next = await handleActionWithMeta(inputValue, settings.integrations.n8nWebhookUrl, {
         userId: user?.id,
         email: user?.primaryEmailAddress?.emailAddress,
       });
+
+      console.log('API Response:', next);
+
+      if (!next || !next.content) {
+        throw new Error('Invalid response from server');
+      }
+
       setAction(next);
       addAction(toHistoryItem(next, 'Created'));
       setInput('');
@@ -72,15 +75,25 @@ export default function ActionsPage() {
       ) {
         console.log('executed');
         addAction(toHistoryItem(next, 'Executed'));
-        setMessage('Auto-execution completed.');
+        setSuccessMessage('Auto-execution completed.');
       }
-    } catch (error) {
-      const detail = error instanceof Error ? error.message : 'Webhook request failed.';
-      addAction(toFailureHistoryItem(value, detail));
-      setMessage(`Action generation failed: ${detail}`);
+    } catch (err) {
+      console.error(err);
+      const detail = err instanceof Error ? err.message : 'Webhook request failed.';
+      addAction(toFailureHistoryItem(inputValue, detail));
+      setError('Failed to process request');
     } finally {
       setIsThinking(false);
     }
+  }
+
+  async function onSubmit(event: FormEvent) {
+    event.preventDefault();
+    const value = input.trim();
+    if (!value) {
+      return;
+    }
+    await handleAction(value);
   }
 
   async function onFix() {
@@ -102,11 +115,11 @@ export default function ActionsPage() {
     });
 
     if (webhook.ok) {
-      setMessage('Action improved with safer wording.');
+      setSuccessMessage('Action improved with safer wording.');
     } else {
       const detail = webhook.error || `Webhook returned ${webhook.status}`;
       addAction(toFailureHistoryItem(fixed.input, `Fix webhook failed: ${detail}`));
-      setMessage(`Action improved locally. Webhook failed: ${detail}`);
+      setError(`Action improved locally. Webhook failed: ${detail}`);
     }
   }
 
@@ -124,11 +137,11 @@ export default function ActionsPage() {
     });
 
     if (webhook.ok) {
-      setMessage('Action executed.');
+      setSuccessMessage('Action executed.');
     } else {
       const detail = webhook.error || `Webhook returned ${webhook.status}`;
       addAction(toFailureHistoryItem(action.input, `Execution webhook failed: ${detail}`));
-      setMessage(`Executed locally. Webhook failed: ${detail}`);
+      setError(`Executed locally. Webhook failed: ${detail}`);
     }
   }
 
@@ -150,7 +163,15 @@ export default function ActionsPage() {
     }
 
     setAction(null);
-    setMessage('Action rejected and cleared.');
+    setSuccessMessage('Action rejected and cleared.');
+  }
+
+  if (!isLoaded) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center text-on-surface-variant">
+        Loading user...
+      </div>
+    );
   }
 
   return (
@@ -167,9 +188,15 @@ export default function ActionsPage() {
           </p>
         </header>
 
-        {message && (
+        {successMessage && (
           <div className="mb-4 rounded-lg border border-primary/20 bg-primary/10 px-4 py-2 text-xs text-primary">
-            {message}
+            {successMessage}
+          </div>
+        )}
+
+        {error && (
+          <div className="mb-4 rounded-lg border border-error/20 bg-error/10 px-4 py-2 text-xs text-error">
+            {error}
           </div>
         )}
 
@@ -195,26 +222,26 @@ export default function ActionsPage() {
                         Final
                       </p>
                       <p className="text-on-surface-variant whitespace-pre-wrap text-sm leading-relaxed">
-                        {action.content_final || action.content}
+                        {action?.content_final || action?.content}
                       </p>
                     </div>
-                    {action.content_original && (
+                    {action?.content_original && (
                       <div className="rounded-lg border border-white/10 bg-surface-container-low/25 p-4">
                         <p className="text-[10px] uppercase tracking-widest text-slate-500 mb-2">
                           Original
                         </p>
                         <p className="text-on-surface-variant whitespace-pre-wrap text-sm leading-relaxed">
-                          {action.content_original}
+                          {action?.content_original}
                         </p>
                       </div>
                     )}
-                    {action.content_improved && (
+                    {action?.content_improved && (
                       <div className="rounded-lg border border-white/10 bg-surface-container-low/25 p-4">
                         <p className="text-[10px] uppercase tracking-widest text-slate-500 mb-2">
                           Improved
                         </p>
                         <p className="text-on-surface-variant whitespace-pre-wrap text-sm leading-relaxed">
-                          {action.content_improved}
+                          {action?.content_improved}
                         </p>
                       </div>
                     )}
@@ -306,13 +333,13 @@ export default function ActionsPage() {
               <h3 className="text-white font-headline font-bold mb-3">Simulation</h3>
               {action ? (
                 <div className="space-y-2 text-sm text-on-surface-variant">
-                  <p>{action.simulation.client_reaction}</p>
+                  <p>{action?.simulation?.client_reaction}</p>
                   <p className="text-xs text-slate-400 uppercase tracking-widest">
-                    Trust: {action.simulation.trust_impact}
+                    Trust: {action?.simulation?.trust_impact}
                   </p>
                   <div className="flex items-center gap-2 text-xs text-slate-300">
                     <Sparkles className="w-3.5 h-3.5 text-primary" />
-                    Risk level: {action.simulation.risk_level}
+                    Risk level: {action?.simulation?.risk_level}
                   </div>
                 </div>
               ) : (

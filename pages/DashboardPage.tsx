@@ -28,11 +28,12 @@ function riskBadgeClass(score: number) {
 
 export default function DashboardPage() {
   const { actions, addAction, settings } = useAppState();
-  const { user } = useUser();
+  const { user, isLoaded } = useUser();
   const [input, setInput] = useState('');
   const [action, setAction] = useState<ActionResult | null>(null);
   const [isThinking, setIsThinking] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const metrics = useMemo(() => {
     const total = actions.length;
@@ -47,32 +48,44 @@ export default function DashboardPage() {
     Boolean(action) && action.type === 'email' && !settings.execution.enableEmailSending;
   const sendDisabled = !action || sendBlockedByRisk || sendBlockedByEmail;
 
+  async function handleAction(inputValue: string) {
+    try {
+      setIsThinking(true);
+      setError(null);
+      setSuccessMessage(null);
+
+      const next = await handleActionWithMeta(inputValue, settings.integrations.n8nWebhookUrl, {
+        userId: user?.id,
+        email: user?.primaryEmailAddress?.emailAddress,
+      });
+
+      console.log('API Response:', next);
+
+      if (!next || !next.content) {
+        throw new Error('Invalid response from server');
+      }
+
+      setAction(next);
+      addAction(toHistoryItem(next, 'Created'));
+      setInput('');
+      setSuccessMessage('Action created from webhook response.');
+    } catch (err) {
+      console.error(err);
+      const detail = err instanceof Error ? err.message : 'Webhook request failed.';
+      addAction(toFailureHistoryItem(inputValue, detail));
+      setError('Failed to process request');
+    } finally {
+      setIsThinking(false);
+    }
+  }
+
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
     const value = input.trim();
     if (!value) {
       return;
     }
-
-    setIsThinking(true);
-    setMessage(null);
-
-    try {
-      const next = await handleActionWithMeta(value, settings.integrations.n8nWebhookUrl, {
-        userId: user?.id,
-        email: user?.primaryEmailAddress?.emailAddress,
-      });
-      setAction(next);
-      addAction(toHistoryItem(next, 'Created'));
-      setInput('');
-      setMessage('Action created from webhook response.');
-    } catch (error) {
-      const detail = error instanceof Error ? error.message : 'Webhook request failed.';
-      addAction(toFailureHistoryItem(value, detail));
-      setMessage(`Action generation failed: ${detail}`);
-    } finally {
-      setIsThinking(false);
-    }
+    await handleAction(value);
   }
 
   async function onSend() {
@@ -89,10 +102,10 @@ export default function DashboardPage() {
     });
 
     if (webhook.ok) {
-      setMessage('Executed and delivered to webhook.');
+      setSuccessMessage('Executed and delivered to webhook.');
     } else {
       addAction(toFailureHistoryItem(action.input, `Execution webhook failed: ${webhook.error || 'unknown error'}`));
-      setMessage(`Executed locally. Webhook failed: ${webhook.error || 'unknown error'}`);
+      setError(`Executed locally. Webhook failed: ${webhook.error || 'unknown error'}`);
     }
   }
 
@@ -115,11 +128,11 @@ export default function DashboardPage() {
     });
 
     if (webhook.ok) {
-      setMessage('Action improved.');
+      setSuccessMessage('Action improved.');
     } else {
       const detail = webhook.error || `Webhook returned ${webhook.status}`;
       addAction(toFailureHistoryItem(fixed.input, `Fix webhook failed: ${detail}`));
-      setMessage(`Action improved locally. Webhook failed: ${detail}`);
+      setError(`Action improved locally. Webhook failed: ${detail}`);
     }
   }
 
@@ -142,7 +155,15 @@ export default function DashboardPage() {
     }
 
     setAction(null);
-    setMessage('Action rejected.');
+    setSuccessMessage('Action rejected.');
+  }
+
+  if (!isLoaded) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center text-on-surface-variant">
+        Loading user...
+      </div>
+    );
   }
 
   return (
@@ -180,9 +201,15 @@ export default function DashboardPage() {
           </div>
         </header>
 
-        {message && (
+        {successMessage && (
           <div className="mb-5 p-3 rounded-xl border border-primary/20 bg-primary/10 text-primary text-sm">
-            {message}
+            {successMessage}
+          </div>
+        )}
+
+        {error && (
+          <div className="mb-5 p-3 rounded-xl border border-error/20 bg-error/10 text-error text-sm">
+            {error}
           </div>
         )}
 
@@ -218,26 +245,26 @@ export default function DashboardPage() {
                           Final
                         </p>
                         <p className="text-on-surface-variant whitespace-pre-wrap text-sm leading-relaxed">
-                          {action.content_final || action.content}
+                          {action?.content_final || action?.content}
                         </p>
                       </div>
-                      {action.content_original && (
+                      {action?.content_original && (
                         <div className="rounded-lg border border-white/10 bg-surface-container-low/25 p-4">
                           <p className="text-[10px] uppercase tracking-widest text-slate-500 mb-2">
                             Original
                           </p>
                           <p className="text-on-surface-variant whitespace-pre-wrap text-sm leading-relaxed">
-                            {action.content_original}
+                            {action?.content_original}
                           </p>
                         </div>
                       )}
-                      {action.content_improved && (
+                      {action?.content_improved && (
                         <div className="rounded-lg border border-white/10 bg-surface-container-low/25 p-4">
                           <p className="text-[10px] uppercase tracking-widest text-slate-500 mb-2">
                             Improved
                           </p>
                           <p className="text-on-surface-variant whitespace-pre-wrap text-sm leading-relaxed">
-                            {action.content_improved}
+                            {action?.content_improved}
                           </p>
                         </div>
                       )}
@@ -334,13 +361,13 @@ export default function DashboardPage() {
               <h3 className="text-white font-headline font-bold mb-3">Simulation</h3>
               {action ? (
                 <div className="space-y-2 text-sm text-on-surface-variant">
-                  <p>{action.simulation.client_reaction}</p>
+                  <p>{action?.simulation?.client_reaction}</p>
                   <p className="text-xs text-slate-400 uppercase tracking-widest">
-                    Trust: {action.simulation.trust_impact}
+                    Trust: {action?.simulation?.trust_impact}
                   </p>
                   <div className="flex items-center gap-2 text-xs text-slate-300">
                     <Sparkles className="w-3.5 h-3.5 text-primary" />
-                    Risk level: {action.simulation.risk_level}
+                    Risk level: {action?.simulation?.risk_level}
                   </div>
                 </div>
               ) : (

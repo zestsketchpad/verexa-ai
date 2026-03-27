@@ -13,6 +13,8 @@ import type { ActionHistoryItem, AgentConfig, AppSettings } from '../types';
 const AGENTS_KEY = 'agentflow_agents_v1';
 const ACTIONS_KEY = 'agentflow_actions_v1';
 const SETTINGS_KEY = 'agentflow_settings_v1';
+const LEGACY_N8N_WEBHOOK = 'https://xlr8-n8n.app.n8n.cloud/webhook/ai-action';
+const DEFAULT_ACTION_API_URL = (import.meta.env.VITE_ACTION_API_URL || '/api/action').trim();
 
 const defaultSettings: AppSettings = {
   api: {
@@ -29,7 +31,7 @@ const defaultSettings: AppSettings = {
     enableAutoExecution: false,
   },
   integrations: {
-    n8nWebhookUrl: 'https://xlr8-n8n.app.n8n.cloud/webhook/ai-action',
+    n8nWebhookUrl: DEFAULT_ACTION_API_URL,
   },
 };
 
@@ -51,6 +53,13 @@ function normalizeSettings(raw: unknown): AppSettings {
   const policy = candidate.policy || {};
   const execution = candidate.execution || {};
   const integrations = candidate.integrations || {};
+
+  const integrationUrlRaw =
+    typeof integrations.n8nWebhookUrl === 'string' ? integrations.n8nWebhookUrl.trim() : '';
+  const normalizedIntegrationUrl =
+    integrationUrlRaw && integrationUrlRaw !== LEGACY_N8N_WEBHOOK
+      ? integrationUrlRaw
+      : defaultSettings.integrations.n8nWebhookUrl;
 
   return {
     api: {
@@ -85,10 +94,7 @@ function normalizeSettings(raw: unknown): AppSettings {
           : defaultSettings.execution.enableAutoExecution,
     },
     integrations: {
-      n8nWebhookUrl:
-        typeof integrations.n8nWebhookUrl === 'string' && integrations.n8nWebhookUrl.trim()
-          ? integrations.n8nWebhookUrl
-          : defaultSettings.integrations.n8nWebhookUrl,
+      n8nWebhookUrl: normalizedIntegrationUrl,
     },
   };
 }

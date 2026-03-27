@@ -1,6 +1,7 @@
 import type { ActionHistoryItem, ActionResult, DecisionLabel, RiskLabel } from '../types';
 
-const DEFAULT_ACTION_WEBHOOK = 'https://xlr8-n8n.app.n8n.cloud/webhook/ai-action';
+const DEFAULT_ACTION_WEBHOOK = (import.meta.env.VITE_ACTION_API_URL || '/api/action').trim();
+const LEGACY_N8N_WEBHOOK = 'https://xlr8-n8n.app.n8n.cloud/webhook/ai-action';
 
 function uid() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -244,7 +245,9 @@ export async function handleActionWithMeta(
   webhookUrl?: string,
   meta?: ActionRequestMeta,
 ): Promise<ActionResult> {
-  const endpoint = (webhookUrl && webhookUrl.trim()) || DEFAULT_ACTION_WEBHOOK;
+  const requestedEndpoint = (webhookUrl && webhookUrl.trim()) || DEFAULT_ACTION_WEBHOOK;
+  const endpoint =
+    requestedEndpoint === LEGACY_N8N_WEBHOOK ? DEFAULT_ACTION_WEBHOOK : requestedEndpoint;
   const payload: Record<string, unknown> = {
     message: input,
   };
@@ -258,13 +261,21 @@ export async function handleActionWithMeta(
     payload.token = meta.token;
   }
 
-  const response = await fetch(endpoint, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(payload),
-  });
+  let response: Response;
+  try {
+    response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : 'Network request failed';
+    throw new Error(
+      `Failed to fetch action API. Configure app to use the Worker proxy endpoint (/api/action) instead of direct n8n webhook. Details: ${detail}`,
+    );
+  }
 
   const contentType = response.headers.get('content-type') || '';
   let data: unknown = null;
