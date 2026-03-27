@@ -9,7 +9,10 @@ function uid() {
 interface ActionRequestMeta {
   userId?: string;
   email?: string;
+  token?: string;
 }
+
+type WorkflowTool = 'email' | 'code' | 'design' | 'research';
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (typeof value === 'object' && value !== null) {
@@ -45,6 +48,65 @@ function asStringArray(value: unknown): string[] {
   return value
     .map((entry) => (typeof entry === 'string' ? entry.trim() : ''))
     .filter(Boolean);
+}
+
+function asObjectString(value: Record<string, unknown> | null): string | null {
+  if (!value) {
+    return null;
+  }
+  return JSON.stringify(value, null, 2);
+}
+
+function extractRecipientEmail(input: string): string | null {
+  const match = input.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
+  return match ? match[0] : null;
+}
+
+function inferToolFromInput(input: string): WorkflowTool {
+  const text = input.toLowerCase();
+  if (
+    text.includes('email') ||
+    text.includes('mail') ||
+    text.includes('gmail') ||
+    /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i.test(input)
+  ) {
+    return 'email';
+  }
+  if (
+    text.includes('code') ||
+    text.includes('bug') ||
+    text.includes('api') ||
+    text.includes('deploy')
+  ) {
+    return 'code';
+  }
+  if (
+    text.includes('design') ||
+    text.includes('ui') ||
+    text.includes('ux') ||
+    text.includes('figma') ||
+    text.includes('logo')
+  ) {
+    return 'design';
+  }
+  return 'research';
+}
+
+function riskFromReaction(value: unknown): RiskLabel | null {
+  const reaction = asString(value)?.toLowerCase();
+  if (!reaction) {
+    return null;
+  }
+  if (reaction === 'negative') {
+    return 'High';
+  }
+  if (reaction === 'neutral') {
+    return 'Medium';
+  }
+  if (reaction === 'positive') {
+    return 'Low';
+  }
+  return null;
 }
 
 function truncate(text: string, max = 240): string {
@@ -115,22 +177,45 @@ function extractPayload(data: unknown): Record<string, unknown> {
 
 function normalizeAction(input: string, data: unknown): ActionResult {
   const payload = extractPayload(data);
+  const resultPayload =
+    asRecord(payload.result) ?? asRecord(payload.generated) ?? asRecord(payload.original);
+  const riskAnalysisPayload = asRecord(payload.risk_analysis);
+  const simulationPayload = asRecord(payload.simulation) ?? {};
 
-  const content = asString(payload.content) ?? asString(payload.output) ?? asString(payload.message);
+  const content =
+    asString(payload.content) ??
+    asString(payload.output) ??
+    asString(resultPayload?.body) ??
+    asString(resultPayload?.code) ??
+    asString(resultPayload?.summary) ??
+    asString(resultPayload?.layout) ??
+    asString(resultPayload?.concept) ??
+    asString(payload.message) ??
+    asObjectString(resultPayload);
   if (!content) {
     throw new Error('Webhook response missing "content".');
   }
 
-  const riskScore = asNumber(payload.risk_score ?? payload.riskScore);
+  const riskScore = asNumber(
+    payload.risk_score ?? payload.riskScore ?? riskAnalysisPayload?.risk_score,
+  );
   if (riskScore === null) {
     throw new Error('Webhook response missing numeric "risk_score".');
   }
   const boundedRiskScore = Math.max(0, Math.min(100, riskScore));
 
-  const simulationPayload = asRecord(payload.simulation) ?? {};
-  const typeRaw = asString(payload.type)?.toLowerCase();
+  const typeRaw = asString(payload.type ?? payload.tool)?.toLowerCase();
   const type: ActionResult['type'] =
     typeRaw === 'email' || typeRaw === 'code' || typeRaw === 'system' ? typeRaw : 'system';
+
+  const issues = asStringArray(payload.issues);
+  const riskAnalysisIssues = asStringArray(riskAnalysisPayload?.issues);
+  const mergedIssues = issues.length > 0 ? issues : riskAnalysisIssues;
+
+  const simulationRiskLevel =
+    (asString(simulationPayload.risk_level) as RiskLabel | null) ??
+    riskFromReaction(simulationPayload.reaction) ??
+    riskLevelFromScore(boundedRiskScore);
 
   return {
     id: asString(payload.id) ?? uid(),
@@ -139,16 +224,25 @@ function normalizeAction(input: string, data: unknown): ActionResult {
     type,
     content,
     risk_score: boundedRiskScore,
-    decision: normalizeDecision(payload.decision, boundedRiskScore),
-    issues: asStringArray(payload.issues),
+    decision: normalizeDecision(
+      payload.decision ?? payload.recommendation ?? riskAnalysisPayload?.recommendation,
+      boundedRiskScore,
+    ),
+    issues: mergedIssues,
     improved_version:
-      asString(payload.improved_version) ?? asString(payload.improvedVersion) ?? content,
+      asString(payload.improved_version) ??
+      asString(payload.improvedVersion) ??
+      asString(resultPayload?.body) ??
+      asObjectString(resultPayload) ??
+      content,
     simulation: {
-      client_reaction: asString(simulationPayload.client_reaction) ?? '',
+      client_reaction:
+        asString(simulationPayload.client_reaction) ??
+        asString(simulationPayload.likely_response) ??
+        asString(simulationPayload.reaction) ??
+        '',
       trust_impact: asString(simulationPayload.trust_impact) ?? '',
-      risk_level:
-        (asString(simulationPayload.risk_level) as RiskLabel | null) ??
-        riskLevelFromScore(boundedRiskScore),
+      risk_level: simulationRiskLevel,
     },
   };
 }
@@ -163,6 +257,25 @@ export async function handleActionWithMeta(
   meta?: ActionRequestMeta,
 ): Promise<ActionResult> {
   const endpoint = (webhookUrl && webhookUrl.trim()) || DEFAULT_ACTION_WEBHOOK;
+  const tool = inferToolFromInput(input);
+  const recipientEmail = extractRecipientEmail(input);
+
+  if (tool === 'email' && !recipientEmail) {
+    throw new Error(
+      'Email action detected but no recipient email found in the prompt. Include a valid recipient email address.',
+    );
+  }
+
+  const payload = {
+    message: input,
+    prompt: input,
+    tool,
+    userId: meta?.userId || 'anonymous',
+    token: meta?.token || 'verixa-web',
+    recipientEmail: tool === 'email' ? recipientEmail : null,
+    email: meta?.email || null,
+    timestamp: new Date().toISOString(),
+  };
 
   const response = await fetch(endpoint, {
     method: 'POST',
@@ -171,11 +284,8 @@ export async function handleActionWithMeta(
       Accept: 'application/json',
     },
     body: JSON.stringify({
-      message: input,
-      prompt: input,
-      userId: meta?.userId || 'anonymous',
-      email: meta?.email || null,
-      timestamp: new Date().toISOString(),
+      ...payload,
+      body: payload,
     }),
   });
 

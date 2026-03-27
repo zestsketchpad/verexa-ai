@@ -1,0 +1,680 @@
+{
+  "name": "My workflow 3",
+  "nodes": [
+    {
+      "parameters": {
+        "jsCode": "const body = $json.body || $json;\nconst prompt = body.prompt || body.message;\nconst tool = body.tool || (/email|mail|@/i.test(prompt || '') ? 'email' : 'research');\nconst userId = body.userId || 'anonymous';\nconst token = body.token || 'verixa-web';\n\nconst emailMatch = (prompt || '').match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}/i);\nconst recipientEmail = body.recipientEmail || body.email || (emailMatch ? emailMatch[0] : null);\n\nif (!prompt || !tool || !userId || !token) {\n  throw new Error('Missing required fields: prompt, tool, userId, token');\n}\n\nif (tool === 'email' && !recipientEmail) {\n  throw new Error('Missing recipientEmail for email tool');\n}\n\nreturn [{\n  prompt,\n  tool,\n  userId,\n  token,\n  recipientEmail: recipientEmail || null,\n  timestamp: new Date().toISOString(),\n}];"
+      },
+      "id": "138e5a8c-14b3-410b-9643-8624d98a1820",
+      "name": "âœ… Validate Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2896,
+        128
+      ]
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4.1-mini",
+          "mode": "list",
+          "cachedResultName": "GPT-4.1-MINI"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "You are an intelligent action generator. Given a user prompt and a tool type, generate a structured action. Always respond in valid JSON only, no markdown, no backticks.\n\nFor tool='email': return { \"type\":\"email\", \"subject\":\"...\", \"body\":\"...\", \"to\":\"...\", \"tone\":\"professional\" }\nFor tool='code': return { \"type\":\"code\", \"language\":\"...\", \"code\":\"...\", \"explanation\":\"...\" }\nFor tool='design': return { \"type\":\"design\", \"concept\":\"...\", \"colors\":[], \"fonts\":[], \"layout\":\"...\" }\nFor tool='research': return { \"type\":\"research\", \"summary\":\"...\", \"keyPoints\":[], \"sources\":[] }",
+              "role": "system"
+            },
+            {
+              "content": "Tool: {{ $json.tool }}\nPrompt: {{ $json.prompt }}\nRecipient email (if email tool): {{ $json.recipientEmail }}\n\nGenerate structured action JSON:"
+            }
+          ]
+        },
+        "options": {
+          "temperature": 0.7
+        }
+      },
+      "id": "bc3fb831-90d2-4794-b0bc-d06ddbd4a66c",
+      "name": "ðŸ¤– OpenAI - Generate Action",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1,
+      "position": [
+        -2704,
+        128
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "7vnr8xSeLt1HBdCd",
+          "name": "n8n free OpenAI API credits"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\nreturn [{\n  tool: data.tool,\n  recipientEmail: data.recipientEmail,\n  prompt: data.prompt,\n  userId: data.userId,\n  token: data.token,\n  timestamp: data.timestamp\n}];"
+      },
+      "id": "c0a2563e-c2af-4538-b1d8-d61449bb62b6",
+      "name": "ðŸ“¦ Carry Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2704,
+        304
+      ],
+      "notes": "Passes tool, recipientEmail, and prompt through the parallel branch so Merge & Decide can access them."
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemini-2.5-flash",
+          "mode": "list",
+          "cachedResultName": "models/gemini-2.5-flash"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "You are a business communication expert. Simulate how a professional client would react to this content. Return JSON only, no markdown, no backticks.\nYou must respond with ONLY a valid JSON object.\n\nContent: {{ $json.choices[0].message.content }}\n\nReturn: { \"reaction\": \"positive|neutral|negative\", \"sentiment_score\": -100 to 100, \"likely_response\": \"...\", \"trust_impact\": \"...\" }"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "d6f8edc4-4101-413d-8876-adf020d32d33",
+      "name": "âœ¨ Gemini - Simulate Reaction",
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1,
+      "position": [
+        -2448,
+        128
+      ],
+      "credentials": {
+        "googlePalmApi": {
+          "id": "9xbcUXTsj5I6uo9M",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4o-mini",
+          "mode": "list",
+          "cachedResultName": "GPT-4O-MINI"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "You are a risk analysis expert. Analyze AI-generated business content and return risk assessment JSON only, no markdown, no backticks. You must respond with ONLY a valid JSON object.",
+              "role": "system"
+            },
+            {
+              "content": "Analyze this content for business risk.\nContent: {{ $json.choices[0].message.content }}\n\nReturn JSON: { \"risk_score\": 0-100, \"issues\": [], \"tone\": \"...\", \"business_risk\": \"...\", \"recommendation\": \"APPROVE|MODIFY|BLOCK\" }"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "c14eec29-9594-4e77-9b01-91338923cc62",
+      "name": "ðŸ” OpenAI - Risk Analysis",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1,
+      "position": [
+        -2448,
+        -48
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "7vnr8xSeLt1HBdCd",
+          "name": "n8n free OpenAI API credits"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "function extractContent(item) {\n  try {\n    const raw = item?.choices?.[0]?.message?.content\n              || item?.message?.content\n              || item?.text\n              || item?.content\n              || '{}';\n    return JSON.parse(raw.replace(/```json|```/g, '').trim());\n  } catch(e) { return {}; }\n}\n\nconst allItems = $input.all();\n\n// Find each item by its shape\nlet generatedRaw = null, riskRaw = null, simRaw = null, contextRaw = null;\n\nfor (const item of allItems) {\n  const j = item.json;\n  // Context item has tool field but no choices\n  if (j.tool && !j.choices) { contextRaw = j; continue; }\n  // Risk analysis has recommendation field in parsed content\n  if (j.choices) {\n    const parsed = extractContent(j);\n    if (parsed.recommendation) { riskRaw = j; }\n    else if (parsed.reaction) { simRaw = j; }\n    else { generatedRaw = j; }\n  }\n}\n\n// Fallbacks\nif (!riskRaw) riskRaw = allItems[0]?.json ?? {};\nif (!simRaw) simRaw = allItems[1]?.json ?? {};\nif (!generatedRaw) {\n  try { generatedRaw = $('ðŸ¤– OpenAI - Generate Action').first()?.json; } catch(e) {}\n  if (!generatedRaw) generatedRaw = allItems[0]?.json ?? {};\n}\n\nconst riskData = extractContent(riskRaw);\nconst simData  = extractContent(simRaw);\n\nlet generatedContent = {};\ntry {\n  const raw = generatedRaw?.choices?.[0]?.message?.content || '{}';\n  generatedContent = JSON.parse(raw.replace(/```json|```/g, '').trim());\n} catch(e) { generatedContent = {}; }\n\nconst risk = parseInt(riskData.risk_score) || 35;\nlet finalDecision = 'MODIFY';\nif (risk < 30) finalDecision = 'APPROVE';\nelse if (risk >= 70) finalDecision = 'BLOCK';\nconst rec = riskData.recommendation;\nif (rec === 'APPROVE' || rec === 'BLOCK' || rec === 'MODIFY') finalDecision = rec;\n\nreturn [{\n  decision: finalDecision,\n  risk_score: risk,\n  tool: contextRaw?.tool || '',\n  recipientEmail: contextRaw?.recipientEmail || null,\n  prompt: contextRaw?.prompt || '',\n  result: generatedContent,\n  generated: generatedContent,\n  risk_analysis: Object.keys(riskData).length ? riskData : { risk_score: risk, issues: [], recommendation: finalDecision },\n  simulation: Object.keys(simData).length ? simData : { reaction: 'neutral', sentiment_score: 50, likely_response: 'Pending.' },\n  timestamp: new Date().toISOString()\n}];"
+      },
+      "id": "0cf87d60-0344-4ede-8768-c572f6009e15",
+      "name": "ðŸ”€ Merge & Decide",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2112,
+        128
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.decision }}",
+              "rightValue": "APPROVE",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "f9524732-3df9-49a7-823a-71ebf3810d2b",
+      "name": "ðŸ”€ IF - Approve?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -1872,
+        -32
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.decision }}",
+              "rightValue": "BLOCK",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a2c29bdc-3051-4b2e-8e99-19ce4505f4b4",
+      "name": "ðŸ”€ IF - Block?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -1872,
+        288
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.tool }}",
+              "rightValue": "email",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "b4b9e6be-7cbc-4888-9eb9-ceef5c72a5fe",
+      "name": "ðŸ“§ IF - Email? (Approve path)",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -1632,
+        -96
+      ]
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4.1-mini",
+          "mode": "list",
+          "cachedResultName": "GPT-4.1-MINI"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "Rewrite the following content to be safe, professional, clear, and free of any risky language. Maintain the original intent and tool type. Return only the improved content as JSON matching the original structure. No markdown, no backticks.",
+              "role": "system"
+            },
+            {
+              "content": "Original content: {{ JSON.stringify($json.generated) }}\nTool type: {{ $json.tool }}\nIssues found: {{ JSON.stringify($json.risk_analysis.issues) }}\n\nRewrite it:"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "c8646691-972f-4309-907a-70c04906ee10",
+      "name": "âœï¸ OpenAI - Rewrite (Modify Path)",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1,
+      "position": [
+        -1872,
+        128
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "7vnr8xSeLt1HBdCd",
+          "name": "n8n free OpenAI API credits"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const prev = $input.first().json;\nconst rewritten = prev.choices?.[0]?.message?.content || '';\nlet rewrittenParsed = {};\ntry { rewrittenParsed = JSON.parse(rewritten.replace(/```json|```/g, '').trim()); } catch(e) {}\n\nreturn [{\n  decision: 'MODIFY',\n  risk_score: prev.risk_score,\n  tool: prev.tool,\n  recipientEmail: prev.recipientEmail || null,\n  generated: prev.generated,\n  rewritten: rewrittenParsed,\n  risk_analysis: prev.risk_analysis,\n  simulation: prev.simulation,\n  timestamp: new Date().toISOString()\n}];"
+      },
+      "id": "7e0ddf34-023f-4958-9e81-66a39ade1d45",
+      "name": "ðŸ“¦ Package Rewrite",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1632,
+        128
+      ],
+      "notes": "Merges Rewrite output with original context (tool, recipientEmail, risk data)."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.tool }}",
+              "rightValue": "email",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "be7a24d3-e103-4674-9b7c-6a469ab9d831",
+      "name": "ðŸ“§ IF - Email? (Modify path)",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -1392,
+        128
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.recipientEmail }}",
+        "subject": "={{ $json.result?.subject || $json.generated?.subject || 'Message from AgentHub' }}",
+        "emailType": "text",
+        "message": "={{ $json.result?.body || $json.generated?.body || '' }}",
+        "options": {}
+      },
+      "id": "1e8bdc10-ae30-4628-b8ee-1819be7b404f",
+      "name": "ðŸ“¨ Gmail - Send (Approved)",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2,
+      "position": [
+        -1392,
+        -96
+      ],
+      "webhookId": "34297130-feac-425c-b48c-11a5de7fbc06",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "E9q5I673lzD4VpXK",
+          "name": "Gmail OAuth2 API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.recipientEmail }}",
+        "subject": "={{ $json.rewritten?.subject || $json.generated?.subject || 'Message from AgentHub' }}",
+        "emailType": "text",
+        "message": "={{ $json.rewritten?.body || $json.generated?.body || '' }}",
+        "options": {}
+      },
+      "id": "a8f85a56-702a-48ae-9439-dd0afec22cbe",
+      "name": "ðŸ“¨ Gmail - Send (Modified)",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2,
+      "position": [
+        -1136,
+        256
+      ],
+      "webhookId": "6c46e5f4-ac14-48ea-b821-837e43925d52",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "E9q5I673lzD4VpXK",
+          "name": "Gmail OAuth2 API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{\n  decision: 'BLOCK',\n  risk_score: $json.risk_score,\n  message: 'Content blocked due to high risk. Please revise your prompt.',\n  issues: $json.risk_analysis?.issues || [],\n  status: 'blocked'\n}];"
+      },
+      "id": "9bced4b5-2e16-430b-856c-aa1bfee5a6c5",
+      "name": "ðŸš« Block Action",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1632,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: true, decision: $json.decision, risk_score: $json.risk_score, tool: $json.tool, result: $json.result || $json.generated, simulation: $json.simulation, risk_analysis: $json.risk_analysis, status: 'approved', emailSent: $json.tool === 'email', message: 'Content approved.' }) }}",
+        "options": {}
+      },
+      "id": "08843dd1-4b46-4d44-8860-a82eed258f8b",
+      "name": "ðŸ“¤ Respond - Approved (Email Sent)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        -1152,
+        -160
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: true, decision: $json.decision, risk_score: $json.risk_score, tool: $json.tool, result: $json.result || $json.generated, simulation: $json.simulation, risk_analysis: $json.risk_analysis, status: 'approved', emailSent: false, message: 'Content approved.' }) }}",
+        "options": {}
+      },
+      "id": "de160a3e-1805-460a-80d0-cf62f734461b",
+      "name": "ðŸ“¤ Respond - Approved (No Email)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        -1152,
+        48
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: true, decision: 'MODIFY', risk_score: $json.risk_score, tool: $json.tool, original: $json.generated, result: $json.rewritten, issues: $json.risk_analysis?.issues, simulation: $json.simulation, risk_analysis: $json.risk_analysis, status: 'modified_sent', emailSent: true, message: 'Content was improved and email sent.' }) }}",
+        "options": {}
+      },
+      "id": "71fd506b-0423-4215-a44c-0df5e8fa7264",
+      "name": "ðŸ“¤ Respond - Modified (Email Sent)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        -912,
+        48
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: true, decision: 'MODIFY', risk_score: $json.risk_score, tool: $json.tool, original: $json.generated, result: $json.rewritten, issues: $json.risk_analysis?.issues, simulation: $json.simulation, risk_analysis: $json.risk_analysis, status: 'modified', emailSent: false, message: 'Content improved. Review before sending.' }) }}",
+        "options": {}
+      },
+      "id": "e116810c-a575-4a35-a85e-14ffb1cf2c45",
+      "name": "ðŸ“¤ Respond - Modified (No Email)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        -928,
+        288
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: false, decision: 'BLOCK', risk_score: $json.risk_score, message: $json.message, issues: $json.issues, status: 'blocked', emailSent: false }) }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "2e0f9bae-4c35-42fd-a89c-e71831f6bb94",
+      "name": "ðŸ“¤ Response - Blocked",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        -1392,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "path": "ai-action",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "550f16aa-0ab7-4dd6-8d07-d687d0c3655b",
+      "name": "ðŸŸ¢ Webhook - AI Action",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        -3152,
+        128
+      ],
+      "webhookId": "b556626e-999e-4a93-8e57-ee6021a43d35"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "âœ… Validate Input": {
+      "main": [
+        [
+          {
+            "node": "ðŸ¤– OpenAI - Generate Action",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ðŸ¤– OpenAI - Generate Action": {
+      "main": [
+        [
+          {
+            "node": "âœ¨ Gemini - Simulate Reaction",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "ðŸ” OpenAI - Risk Analysis",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "ðŸ“¦ Carry Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "âœ¨ Gemini - Simulate Reaction": {
+      "main": [
+        [
+          {
+            "node": "ðŸ”€ Merge & Decide",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ðŸ”€ Merge & Decide": {
+      "main": [
+        [
+          {
+            "node": "ðŸ”€ IF - Approve?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ðŸ”€ IF - Approve?": {
+      "main": [
+        [
+          {
+            "node": "ðŸ“§ IF - Email? (Approve path)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "ðŸ”€ IF - Block?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ðŸ”€ IF - Block?": {
+      "main": [
+        [
+          {
+            "node": "ðŸš« Block Action",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "âœï¸ OpenAI - Rewrite (Modify Path)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ðŸ“§ IF - Email? (Approve path)": {
+      "main": [
+        [
+          {
+            "node": "ðŸ“¨ Gmail - Send (Approved)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "ðŸ“¤ Respond - Approved (No Email)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ðŸ“¨ Gmail - Send (Approved)": {
+      "main": [
+        [
+          {
+            "node": "ðŸ“¤ Respond - Approved (Email Sent)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "âœï¸ OpenAI - Rewrite (Modify Path)": {
+      "main": [
+        [
+          {
+            "node": "ðŸ“¦ Package Rewrite",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ðŸ“¦ Package Rewrite": {
+      "main": [
+        [
+          {
+            "node": "ðŸ“§ IF - Email? (Modify path)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ðŸ“§ IF - Email? (Modify path)": {
+      "main": [
+        [
+          {
+            "node": "ðŸ“¨ Gmail - Send (Modified)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "ðŸ“¤ Respond - Modified (No Email)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ðŸ“¨ Gmail - Send (Modified)": {
+      "main": [
+        [
+          {
+            "node": "ðŸ“¤ Respond - Modified (Email Sent)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ðŸš« Block Action": {
+      "main": [
+        [
+          {
+            "node": "ðŸ“¤ Response - Blocked",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ðŸŸ¢ Webhook - AI Action": {
+      "main": [
+        [
+          {
+            "node": "âœ… Validate Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "b8e2c533-a162-4e21-b271-fcffa62836c4",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "f46bb63cef4c7d7239594e3a8cc4e61718a83e784e8feff3e6e54162d63f94bf"
+  },
+  "id": "h9KOKTeLb298ayHq",
+  "tags": []
+}
