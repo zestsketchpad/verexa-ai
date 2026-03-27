@@ -1,0 +1,41 @@
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&family=Inter:wght@300;400;500;600&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-headline: "Manrope", ui-sans-serif, system-ui, sans-serif;
+  --font-body: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-label: "Inter", ui-sans-serif, system-ui, sans-serif;
+
+  --color-background: #101419;
+  --color-surface: #101419;
+  --color-primary: #a2c9ff;
+  --color-primary-container: #4da3ff;
+  --color-secondary: #d0bcff;
+  --color-tertiary: #ffb95c;
+  --color-error: #ffb4ab;
+  --color-on-surface: #e0e2ea;
+  --color-on-surface-variant: #c0c7d4;
+  --color-outline-variant: #404752;
+  --color-surface-container-low: #181c21;
+  --color-surface-container-lowest: #0a0e13;
+  --color-surface-container-high: #262a30;
+  --color-surface-container-highest: #31353b;
+}
+
+@layer base {
+  body {
+    @apply bg-background text-on-surface font-body;
+  }
+}
+
+.glass-card {
+  @apply bg-[#1c2025]/60 backdrop-blur-[20px] border border-primary/10;
+}
+
+.text-glow {
+  text-shadow: 0 0 20px rgba(162, 201, 255, 0.3);
+}
+
+.primary-glow {
+  box-shadow: 0 0 20px rgba(162, 201, 255, 0.2);
+}
