@@ -29,7 +29,7 @@ const defaultSettings: AppSettings = {
     enableAutoExecution: false,
   },
   integrations: {
-    n8nWebhookUrl: '',
+    n8nWebhookUrl: 'https://xlr8-n8n.app.n8n.cloud/webhook/ai-action',
   },
 };
 
@@ -43,6 +43,54 @@ function readStorage<T>(key: string, fallback: T): T {
   } catch {
     return fallback;
   }
+}
+
+function normalizeSettings(raw: unknown): AppSettings {
+  const candidate = (raw && typeof raw === 'object' ? raw : {}) as Partial<AppSettings>;
+  const api = candidate.api || {};
+  const policy = candidate.policy || {};
+  const execution = candidate.execution || {};
+  const integrations = candidate.integrations || {};
+
+  return {
+    api: {
+      openAiApiKey: typeof api.openAiApiKey === 'string' ? api.openAiApiKey : defaultSettings.api.openAiApiKey,
+      enableAiAnalysis:
+        typeof api.enableAiAnalysis === 'boolean'
+          ? api.enableAiAnalysis
+          : defaultSettings.api.enableAiAnalysis,
+    },
+    policy: {
+      professionalToneEnforcement:
+        typeof policy.professionalToneEnforcement === 'boolean'
+          ? policy.professionalToneEnforcement
+          : defaultSettings.policy.professionalToneEnforcement,
+      blockHighRiskActions:
+        typeof policy.blockHighRiskActions === 'boolean'
+          ? policy.blockHighRiskActions
+          : defaultSettings.policy.blockHighRiskActions,
+      enableSimulation:
+        typeof policy.enableSimulation === 'boolean'
+          ? policy.enableSimulation
+          : defaultSettings.policy.enableSimulation,
+    },
+    execution: {
+      enableEmailSending:
+        typeof execution.enableEmailSending === 'boolean'
+          ? execution.enableEmailSending
+          : defaultSettings.execution.enableEmailSending,
+      enableAutoExecution:
+        typeof execution.enableAutoExecution === 'boolean'
+          ? execution.enableAutoExecution
+          : defaultSettings.execution.enableAutoExecution,
+    },
+    integrations: {
+      n8nWebhookUrl:
+        typeof integrations.n8nWebhookUrl === 'string' && integrations.n8nWebhookUrl.trim()
+          ? integrations.n8nWebhookUrl
+          : defaultSettings.integrations.n8nWebhookUrl,
+    },
+  };
 }
 
 interface AppStateContextValue {
@@ -59,9 +107,10 @@ const AppStateContext = createContext<AppStateContextValue | null>(null);
 export function AppStateProvider({ children }: PropsWithChildren) {
   const [agents, setAgents] = useState<AgentConfig[]>(() => readStorage(AGENTS_KEY, []));
   const [actions, setActions] = useState<ActionHistoryItem[]>(() => readStorage(ACTIONS_KEY, []));
-  const [settings, setSettings] = useState<AppSettings>(() =>
-    readStorage(SETTINGS_KEY, defaultSettings),
-  );
+  const [settings, setSettings] = useState<AppSettings>(() => {
+    const stored = readStorage<unknown>(SETTINGS_KEY, defaultSettings);
+    return normalizeSettings(stored);
+  });
 
   useEffect(() => {
     localStorage.setItem(AGENTS_KEY, JSON.stringify(agents));

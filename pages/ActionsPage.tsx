@@ -2,6 +2,7 @@ import { FormEvent, useMemo, useState } from 'react';
 import { ArrowRight, Sparkles, Wand2 } from 'lucide-react';
 import Sidebar from '../components/Sidebar';
 import { handleAction, toHistoryItem } from '../lib/mockActionEngine';
+import { postActionWebhook } from '../lib/webhook';
 import type { DecisionLabel, MockActionResult } from '../types';
 import { cn } from '../lib/utils';
 import { useAppState } from '../state/AppStateContext';
@@ -69,6 +70,13 @@ export default function ActionsPage() {
       setInput('');
       setIsThinking(false);
 
+      void postActionWebhook({
+        webhookUrl: settings.integrations.n8nWebhookUrl,
+        event: 'chat_input',
+        input: value,
+        action: next,
+      });
+
       if (
         settings.execution.enableAutoExecution &&
         next.decision === 'APPROVE' &&
@@ -104,6 +112,12 @@ export default function ActionsPage() {
     }
     console.log('executed');
     addAction(toHistoryItem(action, 'Executed'));
+    void postActionWebhook({
+      webhookUrl: settings.integrations.n8nWebhookUrl,
+      event: 'execute_action',
+      input: action.input,
+      action,
+    });
     setMessage('Action executed.');
   }
 
@@ -112,6 +126,12 @@ export default function ActionsPage() {
       return;
     }
     addAction(toHistoryItem(action, 'Rejected'));
+    void postActionWebhook({
+      webhookUrl: settings.integrations.n8nWebhookUrl,
+      event: 'reject_action',
+      input: action.input,
+      action,
+    });
     setAction(null);
     setMessage('Action rejected and cleared.');
   }

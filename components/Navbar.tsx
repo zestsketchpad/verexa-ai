@@ -9,7 +9,7 @@ export default function Navbar() {
     <div className="fixed top-4 md:top-6 left-0 w-full z-50 flex justify-center px-4">
       <nav className="w-full max-w-5xl flex items-center justify-between px-4 md:px-8 py-3 rounded-full bg-slate-950/40 backdrop-blur-2xl border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.5)] transition-all duration-300 hover:border-primary/20 hover:shadow-primary/5 relative">
         <Link to="/" className="text-xl font-extrabold tracking-tighter text-primary font-headline whitespace-nowrap">
-          AgentFlow
+          VERIXA
         </Link>
         
         <div className="hidden md:flex gap-8 items-center">
