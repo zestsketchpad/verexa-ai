@@ -1,6 +1,7 @@
 export type DecisionLabel = 'APPROVE' | 'MODIFY' | 'BLOCK';
 export type RiskLabel = 'Low' | 'Medium' | 'High';
 export type ActionTypeLabel = 'email' | 'code' | 'system';
+export type ActionToolSelection = 'auto' | 'system' | 'email' | 'code' | 'research';
 export type AgentTypeLabel = 'Email Agent' | 'Code Agent' | 'General AI';
 export type AgentToolLabel = 'Risk Checker' | 'Policy Guard' | 'Simulation';
 

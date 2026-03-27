@@ -4,9 +4,17 @@ import { useUser } from '@clerk/clerk-react';
 import Sidebar from '../components/Sidebar';
 import { handleActionWithMeta, toFailureHistoryItem, toHistoryItem } from '../lib/actionEngine';
 import { postActionWebhook } from '../lib/webhook';
-import type { ActionResult } from '../types';
+import type { ActionResult, ActionToolSelection } from '../types';
 import { cn } from '../lib/utils';
 import { useAppState } from '../state/AppStateContext';
+
+const TOOL_OPTIONS: Array<{ value: ActionToolSelection; label: string }> = [
+  { value: 'auto', label: 'Auto' },
+  { value: 'system', label: 'System' },
+  { value: 'email', label: 'Email' },
+  { value: 'code', label: 'Code' },
+  { value: 'research', label: 'Research' },
+];
 
 function riskColor(score: number) {
   if (score < 30) {
@@ -22,6 +30,7 @@ export default function ActionsPage() {
   const { addAction, settings } = useAppState();
   const { user, isLoaded } = useUser();
   const [input, setInput] = useState('');
+  const [selectedTool, setSelectedTool] = useState<ActionToolSelection>('auto');
   const [action, setAction] = useState<ActionResult | null>(null);
   const [isThinking, setIsThinking] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -55,6 +64,7 @@ export default function ActionsPage() {
       const next = await handleActionWithMeta(inputValue, settings.integrations.n8nWebhookUrl, {
         userId: user?.id,
         email: user?.primaryEmailAddress?.emailAddress,
+        tool: selectedTool,
       });
 
       console.log('API Response:', next);
@@ -100,9 +110,13 @@ export default function ActionsPage() {
     if (!action) {
       return;
     }
+    const improved = action.content_improved || action.improved_version || action.content;
     const fixed: ActionResult = {
       ...action,
-      content: action.improved_version,
+      content: improved,
+      content_final: improved,
+      content_improved: improved,
+      improved_version: improved,
     };
     setAction(fixed);
     addAction(toHistoryItem(fixed, 'Fixed'));
@@ -284,6 +298,18 @@ export default function ActionsPage() {
 
             <form onSubmit={onSubmit} className="mt-6">
               <div className="glass-card rounded-xl border border-white/10 p-2 flex items-center gap-3">
+                <select
+                  value={selectedTool}
+                  onChange={(event) => setSelectedTool(event.target.value as ActionToolSelection)}
+                  disabled={isThinking}
+                  className="bg-surface-container-low/60 text-slate-200 text-xs md:text-sm rounded-lg border border-white/10 px-3 py-2 outline-none disabled:opacity-60"
+                >
+                  {TOOL_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
                 <input
                   value={input}
                   onChange={(event) => setInput(event.target.value)}

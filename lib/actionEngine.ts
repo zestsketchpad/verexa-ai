@@ -1,4 +1,10 @@
-import type { ActionHistoryItem, ActionResult, DecisionLabel, RiskLabel } from '../types';
+import type {
+  ActionHistoryItem,
+  ActionResult,
+  ActionToolSelection,
+  DecisionLabel,
+  RiskLabel,
+} from '../types';
 
 const ACTION_PROXY_ENDPOINT = '/api/action';
 const DEFAULT_ACTION_WEBHOOK = (import.meta.env.VITE_ACTION_API_URL || ACTION_PROXY_ENDPOINT).trim();
@@ -12,6 +18,7 @@ interface ActionRequestMeta {
   userId?: string;
   email?: string;
   token?: string;
+  tool?: ActionToolSelection;
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -270,7 +277,14 @@ export async function handleActionWithMeta(
       : requestedEndpoint;
   const payload: Record<string, unknown> = {
     message: input,
+    prompt: input,
   };
+  if (meta?.tool) {
+    payload.requestedTool = meta.tool;
+    if (meta.tool !== 'auto') {
+      payload.tool = meta.tool;
+    }
+  }
   if (meta?.userId) {
     payload.userId = meta.userId;
   }
