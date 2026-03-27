@@ -13,3 +13,6 @@
 - [x] Add `.env.example` with `VITE_CLERK_PUBLISHABLE_KEY`
 - [x] Update `README.md` with Clerk setup steps
 - [x] Run build validation
+- [x] Polish and complete login page UI layout and responsiveness
+- [x] Add Clerk-specific theme overrides for complete auth widget styling
+- [x] Run quick build check after UI updates
