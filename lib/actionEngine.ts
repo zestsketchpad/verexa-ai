@@ -42,6 +42,27 @@ function asStringArray(value: unknown): string[] {
     .filter(Boolean);
 }
 
+function truncate(text: string, max = 240): string {
+  const normalized = text.replace(/\s+/g, ' ').trim();
+  if (normalized.length <= max) {
+    return normalized;
+  }
+  return `${normalized.slice(0, max)}...`;
+}
+
+function tryParseJson(raw: string): unknown | null {
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    return null;
+  }
+}
+
 function decisionFromRisk(score: number): DecisionLabel {
   if (score < 30) {
     return 'APPROVE';
@@ -134,24 +155,30 @@ export async function handleAction(input: string, webhookUrl?: string): Promise<
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
+      Accept: 'application/json',
     },
     body: JSON.stringify({
       message: input,
     }),
   });
 
-  let data: unknown = null;
-  try {
-    data = await response.json();
-  } catch {
-    throw new Error('Webhook did not return JSON.');
-  }
+  const rawBody = await response.text();
+  const data = tryParseJson(rawBody);
 
   if (!response.ok) {
-    const message =
+    const responseError =
       (asRecord(data) && asString((data as Record<string, unknown>).message)) ||
+      truncate(rawBody) ||
       `Webhook returned ${response.status}`;
-    throw new Error(message);
+    throw new Error(`Webhook ${response.status}: ${responseError}`);
+  }
+
+  if (data === null) {
+    const message =
+      truncate(rawBody) || 'empty response body';
+    throw new Error(
+      `Webhook returned non-JSON response. Configure n8n to return JSON. Received: ${message}`,
+    );
   }
 
   return normalizeAction(input, data);
