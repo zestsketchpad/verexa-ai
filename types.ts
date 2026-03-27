@@ -16,15 +16,15 @@ export interface ActionResult {
   input: string;
   type: ActionTypeLabel;
   content: string;
+  content_original?: string;
+  content_final?: string;
+  content_improved?: string;
   risk_score: number;
   decision: DecisionLabel;
   issues: string[];
   improved_version: string;
   simulation: ActionSimulation;
 }
-
-export type MockSimulation = ActionSimulation;
-export type MockActionResult = ActionResult;
 
 export interface ActionHistoryItem {
   id: string;

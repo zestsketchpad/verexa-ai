@@ -12,8 +12,6 @@ interface ActionRequestMeta {
   token?: string;
 }
 
-type WorkflowTool = 'email' | 'code' | 'design' | 'research';
-
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (typeof value === 'object' && value !== null) {
     return value as Record<string, unknown>;
@@ -55,41 +53,6 @@ function asObjectString(value: Record<string, unknown> | null): string | null {
     return null;
   }
   return JSON.stringify(value, null, 2);
-}
-
-function extractRecipientEmail(input: string): string | null {
-  const match = input.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
-  return match ? match[0] : null;
-}
-
-function inferToolFromInput(input: string): WorkflowTool {
-  const text = input.toLowerCase();
-  if (
-    text.includes('email') ||
-    text.includes('mail') ||
-    text.includes('gmail') ||
-    /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i.test(input)
-  ) {
-    return 'email';
-  }
-  if (
-    text.includes('code') ||
-    text.includes('bug') ||
-    text.includes('api') ||
-    text.includes('deploy')
-  ) {
-    return 'code';
-  }
-  if (
-    text.includes('design') ||
-    text.includes('ui') ||
-    text.includes('ux') ||
-    text.includes('figma') ||
-    text.includes('logo')
-  ) {
-    return 'design';
-  }
-  return 'research';
 }
 
 function riskFromReaction(value: unknown): RiskLabel | null {
@@ -179,10 +142,29 @@ function normalizeAction(input: string, data: unknown): ActionResult {
   const payload = extractPayload(data);
   const resultPayload =
     asRecord(payload.result) ?? asRecord(payload.generated) ?? asRecord(payload.original);
-  const riskAnalysisPayload = asRecord(payload.risk_analysis);
-  const simulationPayload = asRecord(payload.simulation) ?? {};
+  const riskAnalysisPayload = asRecord(payload.risk_analysis) ?? asRecord(payload.riskAnalysis);
+  const simulationPayload =
+    asRecord(payload.simulation) ?? asRecord(payload.simulation_result) ?? {};
+  const contentPayload = asRecord(payload.content);
+
+  const originalContent =
+    asString(contentPayload?.original) ??
+    asString(contentPayload?.input) ??
+    asString(payload.original) ??
+    asString(payload.input_message);
+  const finalContent =
+    asString(contentPayload?.final) ??
+    asString(payload.final) ??
+    asString(payload.final_content);
+  const improvedContent =
+    asString(contentPayload?.improved) ??
+    asString(payload.improved) ??
+    asString(payload.improved_version) ??
+    asString(payload.improvedVersion);
 
   const content =
+    finalContent ??
+    improvedContent ??
     asString(payload.content) ??
     asString(payload.output) ??
     asString(resultPayload?.body) ??
@@ -197,7 +179,10 @@ function normalizeAction(input: string, data: unknown): ActionResult {
   }
 
   const riskScore = asNumber(
-    payload.risk_score ?? payload.riskScore ?? riskAnalysisPayload?.risk_score,
+    payload.risk_score ??
+      payload.riskScore ??
+      riskAnalysisPayload?.risk_score ??
+      riskAnalysisPayload?.score,
   );
   if (riskScore === null) {
     throw new Error('Webhook response missing numeric "risk_score".');
@@ -223,6 +208,9 @@ function normalizeAction(input: string, data: unknown): ActionResult {
     input,
     type,
     content,
+    content_original: originalContent ?? undefined,
+    content_final: finalContent ?? content,
+    content_improved: improvedContent ?? undefined,
     risk_score: boundedRiskScore,
     decision: normalizeDecision(
       payload.decision ?? payload.recommendation ?? riskAnalysisPayload?.recommendation,
@@ -230,8 +218,8 @@ function normalizeAction(input: string, data: unknown): ActionResult {
     ),
     issues: mergedIssues,
     improved_version:
-      asString(payload.improved_version) ??
-      asString(payload.improvedVersion) ??
+      improvedContent ??
+      finalContent ??
       asString(resultPayload?.body) ??
       asObjectString(resultPayload) ??
       content,
@@ -257,47 +245,52 @@ export async function handleActionWithMeta(
   meta?: ActionRequestMeta,
 ): Promise<ActionResult> {
   const endpoint = (webhookUrl && webhookUrl.trim()) || DEFAULT_ACTION_WEBHOOK;
-  const tool = inferToolFromInput(input);
-  const recipientEmail = extractRecipientEmail(input);
-
-  if (tool === 'email' && !recipientEmail) {
-    throw new Error(
-      'Email action detected but no recipient email found in the prompt. Include a valid recipient email address.',
-    );
-  }
-
-  const payload = {
+  const payload: Record<string, unknown> = {
     message: input,
-    prompt: input,
-    tool,
-    userId: meta?.userId || 'anonymous',
-    token: meta?.token || 'verixa-web',
-    recipientEmail: tool === 'email' ? recipientEmail : null,
-    email: meta?.email || null,
-    timestamp: new Date().toISOString(),
   };
+  if (meta?.userId) {
+    payload.userId = meta.userId;
+  }
+  if (meta?.email) {
+    payload.email = meta.email;
+  }
+  if (meta?.token) {
+    payload.token = meta.token;
+  }
 
   const response = await fetch(endpoint, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Accept: 'application/json',
     },
-    body: JSON.stringify({
-      ...payload,
-      body: payload,
-    }),
+    body: JSON.stringify(payload),
   });
 
-  const rawBody = await response.text();
-  const data = tryParseJson(rawBody);
+  const contentType = response.headers.get('content-type') || '';
+  let data: unknown = null;
+  let rawBody = '';
+
+  if (contentType.toLowerCase().includes('application/json')) {
+    data = await response.json().catch(() => null);
+  } else {
+    rawBody = await response.text();
+    data = tryParseJson(rawBody);
+  }
 
   if (!response.ok) {
     const responseError =
       (asRecord(data) && asString((data as Record<string, unknown>).message)) ||
+      (asRecord(data) && asString((data as Record<string, unknown>).error)) ||
       truncate(rawBody) ||
       `Webhook returned ${response.status}`;
     throw new Error(`Webhook ${response.status}: ${responseError}`);
+  }
+
+  const objectData = asRecord(data);
+  if (objectData && objectData.success === false) {
+    const errorMessage =
+      asString(objectData.message) ?? asString(objectData.error) ?? 'Action failed';
+    throw new Error(errorMessage);
   }
 
   if (data === null) {
@@ -312,6 +305,7 @@ export async function handleActionWithMeta(
     );
   }
 
+  console.log('API Response:', data);
   return normalizeAction(input, data);
 }
 

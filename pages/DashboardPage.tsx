@@ -212,9 +212,36 @@ export default function DashboardPage() {
               <div className="p-4 md:p-6">
                 {action ? (
                   <div className="space-y-4">
-                    <p className="text-on-surface-variant whitespace-pre-wrap text-sm leading-relaxed">
-                      {action.content}
-                    </p>
+                    <div className="space-y-3">
+                      <div className="rounded-lg border border-white/10 bg-surface-container-low/40 p-4">
+                        <p className="text-[10px] uppercase tracking-widest text-slate-500 mb-2">
+                          Final
+                        </p>
+                        <p className="text-on-surface-variant whitespace-pre-wrap text-sm leading-relaxed">
+                          {action.content_final || action.content}
+                        </p>
+                      </div>
+                      {action.content_original && (
+                        <div className="rounded-lg border border-white/10 bg-surface-container-low/25 p-4">
+                          <p className="text-[10px] uppercase tracking-widest text-slate-500 mb-2">
+                            Original
+                          </p>
+                          <p className="text-on-surface-variant whitespace-pre-wrap text-sm leading-relaxed">
+                            {action.content_original}
+                          </p>
+                        </div>
+                      )}
+                      {action.content_improved && (
+                        <div className="rounded-lg border border-white/10 bg-surface-container-low/25 p-4">
+                          <p className="text-[10px] uppercase tracking-widest text-slate-500 mb-2">
+                            Improved
+                          </p>
+                          <p className="text-on-surface-variant whitespace-pre-wrap text-sm leading-relaxed">
+                            {action.content_improved}
+                          </p>
+                        </div>
+                      )}
+                    </div>
                     <div className="flex flex-wrap gap-3 pt-2">
                       <button
                         onClick={onReject}
