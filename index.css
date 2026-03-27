@@ -39,3 +39,19 @@
 .primary-glow {
   box-shadow: 0 0 20px rgba(162, 201, 255, 0.2);
 }
+
+.clerk-auth-label {
+  @apply text-on-surface-variant text-sm font-medium;
+}
+
+.clerk-auth-input {
+  @apply bg-surface-container-low border border-outline-variant text-on-surface rounded-lg focus:border-primary focus:ring-1 focus:ring-primary/30;
+}
+
+.clerk-auth-primary-btn {
+  @apply rounded-lg py-2.5 transition-all shadow-[0_10px_28px_rgba(162,201,255,0.25)];
+}
+
+.clerk-auth-social-btn {
+  @apply rounded-lg border bg-surface-container-lowest/50 transition-colors;
+}
