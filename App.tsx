@@ -4,6 +4,7 @@
  */
 
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { SignedIn, SignedOut } from '@clerk/clerk-react';
 import LandingPage from './pages/LandingPage';
 import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
@@ -16,8 +17,32 @@ export default function App() {
       <Routes>
         <Route path="/" element={<LandingPage />} />
         <Route path="/login" element={<LoginPage />} />
-        <Route path="/dashboard" element={<DashboardPage />} />
-        <Route path="/logs" element={<LogsPage />} />
+        <Route
+          path="/dashboard"
+          element={
+            <>
+              <SignedIn>
+                <DashboardPage />
+              </SignedIn>
+              <SignedOut>
+                <Navigate to="/login" replace />
+              </SignedOut>
+            </>
+          }
+        />
+        <Route
+          path="/logs"
+          element={
+            <>
+              <SignedIn>
+                <LogsPage />
+              </SignedIn>
+              <SignedOut>
+                <Navigate to="/login" replace />
+              </SignedOut>
+            </>
+          }
+        />
         
         {/* Placeholder Routes */}
         <Route path="/actions" element={<PlaceholderPage title="AI Actions" />} />
