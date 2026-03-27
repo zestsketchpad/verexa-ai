@@ -2,7 +2,7 @@
 
 Working-first AI Action Execution Interface.
 
-Current flow (mock mode):
+Current flow:
 
 User Input -> Action Generation -> Risk + Decision -> Fix/Send/Reject
 
@@ -13,10 +13,10 @@ User Input -> Action Generation -> Risk + Decision -> Fix/Send/Reject
 - `/settings`: control panel for API, policy, execution, integrations
 - `/logs`: local history list
 
-## Buttons (mock behavior)
+## Buttons
 
-- `Send` -> `console.log("executed")`
-- `Fix` -> replaces content with `improved_version`
+- `Send` -> posts execute event to webhook
+- `Fix` -> replaces content with webhook-provided `improved_version`
 - `Reject` -> clears current action
 - `+ New Agent` -> opens modal and saves agent config to global state
 

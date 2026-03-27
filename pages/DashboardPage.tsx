@@ -55,26 +55,18 @@ export default function DashboardPage() {
     setIsThinking(true);
     setMessage(null);
 
-    setTimeout(async () => {
-      const next = handleAction(value, settings);
+    try {
+      const next = await handleAction(value, settings.integrations.n8nWebhookUrl);
       setAction(next);
       addAction(toHistoryItem(next, 'Created'));
       setInput('');
+      setMessage('Action created from webhook response.');
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : 'Webhook request failed.';
+      setMessage(`Action generation failed: ${detail}`);
+    } finally {
       setIsThinking(false);
-
-      const webhook = await postActionWebhook({
-        webhookUrl: settings.integrations.n8nWebhookUrl,
-        event: 'chat_input',
-        input: value,
-        action: next,
-      });
-
-      if (webhook.ok) {
-        setMessage('Action created and sent to webhook.');
-      } else {
-        setMessage(`Action created. Webhook failed: ${webhook.error || 'unknown error'}`);
-      }
-    }, 250);
+    }
   }
 
   async function onSend() {
@@ -101,12 +93,9 @@ export default function DashboardPage() {
     if (!action) {
       return;
     }
-    const reducedRisk = Math.max(0, action.risk_score - 15);
-    const fixed: MockActionResult = {
+    const fixed: ActionResult = {
       ...action,
       content: action.improved_version,
-      risk_score: reducedRisk,
-      decision: decisionFromRisk(reducedRisk),
     };
     setAction(fixed);
     addAction(toHistoryItem(fixed, 'Fixed'));
@@ -198,7 +187,7 @@ export default function DashboardPage() {
                     riskBadgeClass(action?.risk_score ?? 0),
                   )}
                 >
-                  {action ? `Risk ${action.risk_score} • ${action.decision}` : 'No Action Yet'}
+                  {action ? `Risk ${action.risk_score} - ${action.decision}` : 'No Action Yet'}
                 </div>
               </div>
               <div className="p-4 md:p-6">
@@ -253,18 +242,19 @@ export default function DashboardPage() {
                 <input
                   value={input}
                   onChange={(event) => setInput(event.target.value)}
+                  disabled={isThinking}
                   className="flex-1 bg-transparent px-4 py-3 text-white text-sm outline-none placeholder:text-slate-600"
                   placeholder='Try: "Send delay email to client"'
                 />
                 <button
                   type="submit"
-                  disabled={isThinking}
+                  disabled={isThinking || !input.trim()}
                   className="w-10 h-10 rounded-full bg-primary text-on-primary flex items-center justify-center disabled:opacity-50"
                 >
                   <ArrowRight className="w-4 h-4" />
                 </button>
               </div>
-              {isThinking && <p className="text-xs text-slate-500 mt-2">Generating action...</p>}
+              {isThinking && <p className="text-xs text-slate-500 mt-2">Analyzing...</p>}
             </form>
           </section>
 

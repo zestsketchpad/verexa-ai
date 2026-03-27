@@ -1,4 +1,4 @@
-import type { MockActionResult } from '../types';
+import type { ActionResult } from '../types';
 
 export interface WebhookResult {
   ok: boolean;
@@ -10,7 +10,7 @@ export async function postActionWebhook(params: {
   webhookUrl: string;
   event: 'chat_input' | 'execute_action' | 'fix_action' | 'reject_action';
   input: string;
-  action?: MockActionResult | null;
+  action?: ActionResult | null;
 }): Promise<WebhookResult> {
   const { webhookUrl, event, input, action } = params;
 

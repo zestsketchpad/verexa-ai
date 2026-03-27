@@ -15,7 +15,7 @@ export default function LogsPage() {
             Logs
           </h2>
           <p className="text-on-surface-variant mt-2 text-sm md:text-base">
-            Local action history (mock mode).
+            Local action history.
           </p>
         </header>
 

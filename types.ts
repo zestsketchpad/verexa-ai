@@ -4,13 +4,13 @@ export type ActionTypeLabel = 'email' | 'code' | 'system';
 export type AgentTypeLabel = 'Email Agent' | 'Code Agent' | 'General AI';
 export type AgentToolLabel = 'Risk Checker' | 'Policy Guard' | 'Simulation';
 
-export interface MockSimulation {
+export interface ActionSimulation {
   client_reaction: string;
   trust_impact: string;
   risk_level: RiskLabel;
 }
 
-export interface MockActionResult {
+export interface ActionResult {
   id: string;
   createdAt: string;
   input: string;
@@ -20,8 +20,11 @@ export interface MockActionResult {
   decision: DecisionLabel;
   issues: string[];
   improved_version: string;
-  simulation: MockSimulation;
+  simulation: ActionSimulation;
 }
+
+export type MockSimulation = ActionSimulation;
+export type MockActionResult = ActionResult;
 
 export interface ActionHistoryItem {
   id: string;
