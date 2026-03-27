@@ -44,6 +44,10 @@ export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
 
+    if (url.pathname === '/favicon.ico') {
+      return Response.redirect(`${url.origin}/favicon.svg`, 302);
+    }
+
     if (url.pathname.startsWith('/api/')) {
       if (request.method === 'OPTIONS') {
         return toCorsNoContent();
@@ -125,7 +129,10 @@ export default {
       return toJson({ success: false, message: 'Not found' }, 404);
     }
 
-    return env.ASSETS.fetch(request);
+    try {
+      return await env.ASSETS.fetch(request);
+    } catch {
+      return toJson({ success: false, message: 'Asset not found' }, 404);
+    }
   },
 };
-
