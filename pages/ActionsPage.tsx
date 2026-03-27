@@ -1,7 +1,8 @@
 import { FormEvent, useMemo, useState } from 'react';
-import { ArrowRight, Sparkles, Wand2 } from 'lucide-react';
+import { ArrowRight, Sparkles, Wand2, ShieldAlert, CheckCircle2 } from 'lucide-react';
+import { useUser } from '@clerk/clerk-react';
 import Sidebar from '../components/Sidebar';
-import { handleAction, toHistoryItem } from '../lib/actionEngine';
+import { handleActionWithMeta, toFailureHistoryItem, toHistoryItem } from '../lib/actionEngine';
 import { postActionWebhook } from '../lib/webhook';
 import type { ActionResult } from '../types';
 import { cn } from '../lib/utils';
@@ -19,6 +20,7 @@ function riskColor(score: number) {
 
 export default function ActionsPage() {
   const { addAction, settings } = useAppState();
+  const { user } = useUser();
   const [input, setInput] = useState('');
   const [action, setAction] = useState<ActionResult | null>(null);
   const [isThinking, setIsThinking] = useState(false);
@@ -54,7 +56,10 @@ export default function ActionsPage() {
     setMessage(null);
 
     try {
-      const next = await handleAction(value, settings.integrations.n8nWebhookUrl);
+      const next = await handleActionWithMeta(value, settings.integrations.n8nWebhookUrl, {
+        userId: user?.id,
+        email: user?.primaryEmailAddress?.emailAddress,
+      });
       setAction(next);
       addAction(toHistoryItem(next, 'Created'));
       setInput('');
@@ -71,13 +76,14 @@ export default function ActionsPage() {
       }
     } catch (error) {
       const detail = error instanceof Error ? error.message : 'Webhook request failed.';
+      addAction(toFailureHistoryItem(value, detail));
       setMessage(`Action generation failed: ${detail}`);
     } finally {
       setIsThinking(false);
     }
   }
 
-  function onFix() {
+  async function onFix() {
     if (!action) {
       return;
     }
@@ -87,35 +93,62 @@ export default function ActionsPage() {
     };
     setAction(fixed);
     addAction(toHistoryItem(fixed, 'Fixed'));
-    setMessage('Action improved with safer wording.');
+
+    const webhook = await postActionWebhook({
+      webhookUrl: settings.integrations.n8nWebhookUrl,
+      event: 'fix_action',
+      input: fixed.input,
+      action: fixed,
+    });
+
+    if (webhook.ok) {
+      setMessage('Action improved with safer wording.');
+    } else {
+      const detail = webhook.error || `Webhook returned ${webhook.status}`;
+      addAction(toFailureHistoryItem(fixed.input, `Fix webhook failed: ${detail}`));
+      setMessage(`Action improved locally. Webhook failed: ${detail}`);
+    }
   }
 
-  function onSend() {
+  async function onSend() {
     if (!action || sendDisabled) {
       return;
     }
     console.log('executed');
     addAction(toHistoryItem(action, 'Executed'));
-    void postActionWebhook({
+    const webhook = await postActionWebhook({
       webhookUrl: settings.integrations.n8nWebhookUrl,
       event: 'execute_action',
       input: action.input,
       action,
     });
-    setMessage('Action executed.');
+
+    if (webhook.ok) {
+      setMessage('Action executed.');
+    } else {
+      const detail = webhook.error || `Webhook returned ${webhook.status}`;
+      addAction(toFailureHistoryItem(action.input, `Execution webhook failed: ${detail}`));
+      setMessage(`Executed locally. Webhook failed: ${detail}`);
+    }
   }
 
-  function onReject() {
+  async function onReject() {
     if (!action) {
       return;
     }
     addAction(toHistoryItem(action, 'Rejected'));
-    void postActionWebhook({
+    const webhook = await postActionWebhook({
       webhookUrl: settings.integrations.n8nWebhookUrl,
       event: 'reject_action',
       input: action.input,
       action,
     });
+
+    if (!webhook.ok) {
+      const detail = webhook.error || `Webhook returned ${webhook.status}`;
+      addAction(toFailureHistoryItem(action.input, `Reject webhook failed: ${detail}`));
+    }
+
     setAction(null);
     setMessage('Action rejected and cleared.');
   }
@@ -261,6 +294,26 @@ export default function ActionsPage() {
                 <p className="text-sm text-on-surface-variant">
                   Simulation appears after action generation.
                 </p>
+              )}
+            </div>
+
+            <div className="glass-card rounded-xl border border-white/10 p-5">
+              <h3 className="text-white font-headline font-bold mb-3">Issues</h3>
+              {action && action.issues.length > 0 ? (
+                <ul className="space-y-2">
+                  {action.issues.map((issue, idx) => (
+                    <li key={idx} className="text-sm text-on-surface-variant flex items-start gap-2">
+                      {action.decision === 'BLOCK' ? (
+                        <ShieldAlert className="w-4 h-4 text-error mt-0.5" />
+                      ) : (
+                        <CheckCircle2 className="w-4 h-4 text-tertiary mt-0.5" />
+                      )}
+                      {issue}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-sm text-on-surface-variant">No issues yet.</p>
               )}
             </div>
           </aside>

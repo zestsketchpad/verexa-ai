@@ -33,7 +33,9 @@ export interface ActionHistoryItem {
   type: ActionTypeLabel;
   risk_score: number;
   decision: DecisionLabel;
-  status: 'Created' | 'Fixed' | 'Executed' | 'Rejected';
+  status: 'Created' | 'Fixed' | 'Executed' | 'Rejected' | 'Failed';
+  issues?: string[];
+  note?: string;
 }
 
 export interface AgentConfig {

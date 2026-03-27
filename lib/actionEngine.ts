@@ -6,6 +6,11 @@ function uid() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+interface ActionRequestMeta {
+  userId?: string;
+  email?: string;
+}
+
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (typeof value === 'object' && value !== null) {
     return value as Record<string, unknown>;
@@ -149,6 +154,14 @@ function normalizeAction(input: string, data: unknown): ActionResult {
 }
 
 export async function handleAction(input: string, webhookUrl?: string): Promise<ActionResult> {
+  return handleActionWithMeta(input, webhookUrl);
+}
+
+export async function handleActionWithMeta(
+  input: string,
+  webhookUrl?: string,
+  meta?: ActionRequestMeta,
+): Promise<ActionResult> {
   const endpoint = (webhookUrl && webhookUrl.trim()) || DEFAULT_ACTION_WEBHOOK;
 
   const response = await fetch(endpoint, {
@@ -159,6 +172,10 @@ export async function handleAction(input: string, webhookUrl?: string): Promise<
     },
     body: JSON.stringify({
       message: input,
+      prompt: input,
+      userId: meta?.userId || 'anonymous',
+      email: meta?.email || null,
+      timestamp: new Date().toISOString(),
     }),
   });
 
@@ -196,5 +213,20 @@ export function toHistoryItem(
     risk_score: action.risk_score,
     decision: action.decision,
     status,
+    issues: action.issues,
+  };
+}
+
+export function toFailureHistoryItem(input: string, note: string): ActionHistoryItem {
+  return {
+    id: uid(),
+    createdAt: new Date().toISOString(),
+    input,
+    type: 'system',
+    risk_score: 100,
+    decision: 'BLOCK',
+    status: 'Failed',
+    issues: [note],
+    note,
   };
 }

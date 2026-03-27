@@ -27,6 +27,21 @@ export default function LogsPage() {
               {items.map((item) => (
                 <div key={`${item.id}-${item.createdAt}`} className="rounded-lg border border-white/5 bg-surface-container-low/40 p-3">
                   <p className="text-sm text-white truncate">{item.input}</p>
+                  {item.note && (
+                    <p className="mt-1 text-xs text-tertiary">{item.note}</p>
+                  )}
+                  {item.issues && item.issues.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {item.issues.map((issue, index) => (
+                        <span
+                          key={`${item.id}-issue-${index}`}
+                          className="rounded-full border border-white/10 px-2 py-0.5 text-[10px] text-on-surface-variant"
+                        >
+                          {issue}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                   <div className="mt-2 flex flex-wrap items-center gap-3 text-[11px] uppercase tracking-wider text-slate-400">
                     <span>{item.type}</span>
                     <span>Risk {item.risk_score}</span>

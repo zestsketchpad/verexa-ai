@@ -1,5 +1,6 @@
 import { FormEvent, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
+import { useUser } from '@clerk/clerk-react';
 import {
   Mail,
   ArrowRight,
@@ -11,7 +12,7 @@ import {
 import Sidebar from '../components/Sidebar';
 import { cn } from '../lib/utils';
 import { useAppState } from '../state/AppStateContext';
-import { handleAction, toHistoryItem } from '../lib/actionEngine';
+import { handleActionWithMeta, toFailureHistoryItem, toHistoryItem } from '../lib/actionEngine';
 import { postActionWebhook } from '../lib/webhook';
 import type { ActionResult } from '../types';
 
@@ -27,6 +28,7 @@ function riskBadgeClass(score: number) {
 
 export default function DashboardPage() {
   const { actions, addAction, settings } = useAppState();
+  const { user } = useUser();
   const [input, setInput] = useState('');
   const [action, setAction] = useState<ActionResult | null>(null);
   const [isThinking, setIsThinking] = useState(false);
@@ -56,13 +58,17 @@ export default function DashboardPage() {
     setMessage(null);
 
     try {
-      const next = await handleAction(value, settings.integrations.n8nWebhookUrl);
+      const next = await handleActionWithMeta(value, settings.integrations.n8nWebhookUrl, {
+        userId: user?.id,
+        email: user?.primaryEmailAddress?.emailAddress,
+      });
       setAction(next);
       addAction(toHistoryItem(next, 'Created'));
       setInput('');
       setMessage('Action created from webhook response.');
     } catch (error) {
       const detail = error instanceof Error ? error.message : 'Webhook request failed.';
+      addAction(toFailureHistoryItem(value, detail));
       setMessage(`Action generation failed: ${detail}`);
     } finally {
       setIsThinking(false);
@@ -85,6 +91,7 @@ export default function DashboardPage() {
     if (webhook.ok) {
       setMessage('Executed and delivered to webhook.');
     } else {
+      addAction(toFailureHistoryItem(action.input, `Execution webhook failed: ${webhook.error || 'unknown error'}`));
       setMessage(`Executed locally. Webhook failed: ${webhook.error || 'unknown error'}`);
     }
   }
@@ -100,14 +107,20 @@ export default function DashboardPage() {
     setAction(fixed);
     addAction(toHistoryItem(fixed, 'Fixed'));
 
-    await postActionWebhook({
+    const webhook = await postActionWebhook({
       webhookUrl: settings.integrations.n8nWebhookUrl,
       event: 'fix_action',
       input: fixed.input,
       action: fixed,
     });
 
-    setMessage('Action improved.');
+    if (webhook.ok) {
+      setMessage('Action improved.');
+    } else {
+      const detail = webhook.error || `Webhook returned ${webhook.status}`;
+      addAction(toFailureHistoryItem(fixed.input, `Fix webhook failed: ${detail}`));
+      setMessage(`Action improved locally. Webhook failed: ${detail}`);
+    }
   }
 
   async function onReject() {
@@ -116,12 +129,18 @@ export default function DashboardPage() {
     }
 
     addAction(toHistoryItem(action, 'Rejected'));
-    await postActionWebhook({
+    const webhook = await postActionWebhook({
       webhookUrl: settings.integrations.n8nWebhookUrl,
       event: 'reject_action',
       input: action.input,
       action,
     });
+
+    if (!webhook.ok) {
+      const detail = webhook.error || `Webhook returned ${webhook.status}`;
+      addAction(toFailureHistoryItem(action.input, `Reject webhook failed: ${detail}`));
+    }
+
     setAction(null);
     setMessage('Action rejected.');
   }
