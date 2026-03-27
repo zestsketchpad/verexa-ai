@@ -90,6 +90,7 @@ export default {
             (parsedRecord &&
               typeof parsedRecord.error === 'string' &&
               parsedRecord.error.trim()) ||
+            (raw.trim() ? raw.slice(0, 400) : '') ||
             `Webhook returned ${upstream.status}`;
           return toJson(
             {
@@ -97,7 +98,7 @@ export default {
               message,
               upstreamStatus: upstream.status,
             },
-            502,
+            upstream.status,
           );
         }
 

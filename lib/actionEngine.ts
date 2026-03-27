@@ -1,6 +1,7 @@
 import type { ActionHistoryItem, ActionResult, DecisionLabel, RiskLabel } from '../types';
 
-const DEFAULT_ACTION_WEBHOOK = (import.meta.env.VITE_ACTION_API_URL || '/api/action').trim();
+const ACTION_PROXY_ENDPOINT = '/api/action';
+const DEFAULT_ACTION_WEBHOOK = (import.meta.env.VITE_ACTION_API_URL || ACTION_PROXY_ENDPOINT).trim();
 const LEGACY_N8N_WEBHOOK = 'https://xlr8-n8n.app.n8n.cloud/webhook/ai-action';
 
 function uid() {
@@ -91,6 +92,23 @@ function tryParseJson(raw: string): unknown | null {
     return JSON.parse(trimmed);
   } catch {
     return null;
+  }
+}
+
+function isDirectN8nWebhook(endpoint: string): boolean {
+  const candidate = endpoint.trim();
+  if (!candidate) {
+    return false;
+  }
+
+  try {
+    const parsed =
+      typeof window !== 'undefined'
+        ? new URL(candidate, window.location.origin)
+        : new URL(candidate, 'https://example.com');
+    return parsed.hostname.includes('n8n.cloud') && parsed.pathname.includes('/webhook');
+  } catch {
+    return false;
   }
 }
 
@@ -247,7 +265,9 @@ export async function handleActionWithMeta(
 ): Promise<ActionResult> {
   const requestedEndpoint = (webhookUrl && webhookUrl.trim()) || DEFAULT_ACTION_WEBHOOK;
   const endpoint =
-    requestedEndpoint === LEGACY_N8N_WEBHOOK ? DEFAULT_ACTION_WEBHOOK : requestedEndpoint;
+    requestedEndpoint === LEGACY_N8N_WEBHOOK || isDirectN8nWebhook(requestedEndpoint)
+      ? ACTION_PROXY_ENDPOINT
+      : requestedEndpoint;
   const payload: Record<string, unknown> = {
     message: input,
   };
@@ -294,6 +314,11 @@ export async function handleActionWithMeta(
       (asRecord(data) && asString((data as Record<string, unknown>).error)) ||
       truncate(rawBody) ||
       `Webhook returned ${response.status}`;
+    if (response.status === 405) {
+      throw new Error(
+        `Webhook ${response.status}: ${responseError}. Configure n8n Webhook node method to POST and use the active webhook URL.`,
+      );
+    }
     throw new Error(`Webhook ${response.status}: ${responseError}`);
   }
 
