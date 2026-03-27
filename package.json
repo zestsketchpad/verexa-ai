@@ -7,7 +7,11 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "deploy": "npm run build && wrangler deploy"
+    "deploy": "npm run build && wrangler deploy",
+    "worker:dev": "wrangler dev --config worker-api/wrangler.toml",
+    "worker:deploy": "wrangler deploy --config worker-api/wrangler.toml",
+    "worker:secret:openai": "wrangler secret put OPENAI_API_KEY --config worker-api/wrangler.toml",
+    "worker:secret:n8n": "wrangler secret put N8N_WEBHOOK_URL --config worker-api/wrangler.toml"
   },
   "dependencies": {
     "@clerk/clerk-react": "^5.61.4",
