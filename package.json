@@ -10,6 +10,7 @@
     "deploy": "npm run build && wrangler deploy"
   },
   "dependencies": {
+    "@clerk/clerk-react": "^5.61.4",
     "clsx": "^2.1.1",
     "lucide-react": "^0.468.0",
     "motion": "^12.0.0",
