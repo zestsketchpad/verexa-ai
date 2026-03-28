@@ -1,4 +1,4 @@
-# AgentFlow / Verixa
+# VerixaAI / Verixa
 
 Working-first AI Action Execution Interface.
 

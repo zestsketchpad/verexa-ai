@@ -71,7 +71,7 @@ export default function Sidebar() {
         )}
       >
         <div className="mb-10 px-2 mt-12 lg:mt-0">
-          <h1 className="text-lg font-headline font-bold text-white tracking-tighter">AgentFlow</h1>
+          <h1 className="text-lg font-headline font-bold text-white tracking-tighter">VerixaAI</h1>
           <p className="text-[10px] uppercase tracking-[0.2em] text-slate-500 font-label">
             AI Action Control
           </p>

@@ -3,7 +3,7 @@ interface Env {
   N8N_WEBHOOK_URL?: string;
 }
 
-const DEFAULT_N8N_WEBHOOK = 'https://xlr8-n8n.app.n8n.cloud/webhook/ai-action';
+const DEFAULT_N8N_WEBHOOK = 'https://xlr8-n8n.app.n8n.cloud/webhook/master-agent-webhook/chat';
 
 const CORS_HEADERS: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',

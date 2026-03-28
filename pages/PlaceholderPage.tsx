@@ -12,7 +12,7 @@ export default function PlaceholderPage({ title }: { title: string }) {
           className="glass-card p-12 rounded-2xl border border-white/5 max-w-md"
         >
           <h2 className="text-3xl font-headline font-bold text-white mb-4">{title}</h2>
-          <p className="text-on-surface-variant mb-8">This module is currently under development as part of the AgentFlow AI orchestration layer.</p>
+          <p className="text-on-surface-variant mb-8">This module is currently under development as part of the VerixaAI AI orchestration layer.</p>
           <div className="w-full h-2 bg-surface-container-highest rounded-full overflow-hidden">
             <div className="h-full bg-primary w-2/3 animate-pulse"></div>
           </div>
