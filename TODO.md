@@ -1,0 +1,18 @@
+- [x] Update `pages/LoginPage.tsx` to submit login credentials to webhook
+- [x] Add loading, success, and error states in login UI
+- [x] Navigate to `/dashboard` only on successful webhook response
+- [x] Mark TODO as completed after implementation
+- [x] Refactor `pages/LoginPage.tsx` to support Google-only login flow
+- [x] Remove email/password login UI and related logic
+- [x] Remove free trial text/link from login page
+- [x] Run quick build check
+- [x] Install `@clerk/clerk-react`
+- [x] Wrap app with `ClerkProvider` in `main.tsx`
+- [x] Replace login page with Clerk SignIn/SignUp + Google login
+- [x] Protect authenticated routes in `App.tsx`
+- [x] Add `.env.example` with `VITE_CLERK_PUBLISHABLE_KEY`
+- [x] Update `README.md` with Clerk setup steps
+- [x] Run build validation
+- [x] Polish and complete login page UI layout and responsiveness
+- [x] Add Clerk-specific theme overrides for complete auth widget styling
+- [x] Run quick build check after UI updates
