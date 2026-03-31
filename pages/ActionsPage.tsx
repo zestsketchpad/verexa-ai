@@ -214,7 +214,7 @@ export default function ActionsPage() {
           </div>
         )}
 
-        <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 min-h-[70vh]">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-12 gap-4 sm:gap-6 min-h-[70vh]">
           <section className="xl:col-span-8 flex flex-col">
             <div className="glass-card rounded-xl border border-white/10 p-5 md:p-6 flex-1">
               {action ? (

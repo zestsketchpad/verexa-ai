@@ -42,13 +42,13 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen flex items-center justify-center px-4 py-6 md:px-8 md:py-10 selection:bg-primary selection:text-on-primary bg-background">
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-[10%] -left-[10%] w-[45%] h-[45%] bg-primary/10 blur-[130px] rounded-full" />
-        <div className="absolute top-[15%] -right-[5%] w-[35%] h-[35%] bg-secondary/10 blur-[120px] rounded-full" />
-        <div className="absolute -bottom-[8%] left-[18%] w-[38%] h-[38%] bg-tertiary/5 blur-[130px] rounded-full" />
+        <div className="absolute -top-[10%] -left-[10%] w-[80%] sm:w-[60%] md:w-[45%] h-[80%] sm:h-[60%] md:h-[45%] bg-primary/10 blur-[80px] sm:blur-[110px] md:blur-[130px] rounded-full" />
+        <div className="absolute top-[15%] -right-[5%] w-[70%] sm:w-[50%] md:w-[35%] h-[70%] sm:h-[50%] md:h-[35%] bg-secondary/10 blur-[90px] sm:blur-[110px] md:blur-[120px] rounded-full" />
+        <div className="absolute -bottom-[8%] left-[18%] w-[75%] sm:w-[55%] md:w-[38%] h-[75%] sm:h-[55%] md:h-[38%] bg-tertiary/5 blur-[90px] sm:blur-[110px] md:blur-[130px] rounded-full" />
       </div>
 
-      <main className="relative z-10 flex flex-col lg:flex-row w-full max-w-6xl lg:min-h-[760px] glass-card rounded-2xl overflow-hidden shadow-2xl border border-white/10">
-        <section className="hidden lg:flex flex-col justify-between w-[46%] p-14 xl:p-16 bg-surface-container-low/40 relative overflow-hidden">
+      <main className="relative z-10 flex flex-col lg:flex-row w-full max-w-6xl lg:min-h-[760px] glass-card rounded-lg sm:rounded-2xl overflow-hidden shadow-2xl border border-white/10">
+        <section className="hidden lg:flex flex-col justify-between lg:w-[46%] p-6 sm:p-10 lg:p-14 xl:p-16 bg-surface-container-low/40 relative overflow-hidden">
           <div
             className="absolute inset-0 opacity-20"
             style={{
@@ -111,8 +111,8 @@ export default function LoginPage() {
           </div>
         </section>
 
-        <section className="flex-1 flex flex-col justify-center p-5 sm:p-8 md:p-10 lg:p-14 xl:p-16 bg-surface">
-          <div className="max-w-md w-full mx-auto">
+        <section className="flex-1 flex flex-col justify-center p-4 sm:p-6 md:p-8 lg:p-10 xl:p-14 bg-surface">
+          <div className="w-full max-w-sm mx-auto">
             <div className="flex lg:hidden items-center gap-2 mb-8 sm:mb-10">
               <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary to-secondary flex items-center justify-center">
                 <Zap className="w-4 h-4 text-on-primary fill-current" />

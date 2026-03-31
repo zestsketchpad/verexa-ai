@@ -146,7 +146,7 @@ export default function DashboardPage() {
   return (
     <div className="min-h-screen bg-[#070809] flex text-[#e2e8f0]" style={{ fontFamily: '"Space Grotesk", sans-serif' }}>
       <Sidebar />
-      <main className="lg:ml-64 flex-grow px-4 pb-8 pt-24 lg:pt-8">
+      <main className="lg:ml-64 flex-grow px-3 sm:px-4 md:px-6 pb-6 sm:pb-8 pt-20 sm:pt-24 lg:pt-8">
         <div className="mx-auto max-w-[980px]">
           <header className="mb-12 flex flex-wrap items-center gap-4 border-b border-[#1a2030] pb-6">
             <div className="flex h-10 w-10 items-center justify-center rounded-[10px] bg-gradient-to-br from-[#3b82f6] to-[#8b5cf6] text-[18px] font-extrabold text-white">V</div>

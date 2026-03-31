@@ -24,7 +24,7 @@ function GridBackground() {
 
       {/* animated aurora blobs */}
       <motion.div
-        className="absolute -top-40 -left-40 w-[700px] h-[700px] rounded-full"
+        className="absolute -top-20 sm:-top-32 md:-top-40 -left-20 sm:-left-32 md:-left-40 w-48 sm:w-96 md:w-[700px] h-48 sm:h-96 md:h-[700px] rounded-full"
         style={{
           background:
             'radial-gradient(circle, rgba(99,155,255,0.12) 0%, transparent 70%)',
@@ -34,7 +34,7 @@ function GridBackground() {
         transition={{ duration: 18, repeat: Infinity, ease: 'easeInOut' }}
       />
       <motion.div
-        className="absolute top-1/3 -right-40 w-[600px] h-[600px] rounded-full"
+        className="absolute top-1/4 sm:top-1/3 -right-16 sm:-right-32 md:-right-40 w-40 sm:w-80 md:w-[600px] h-40 sm:h-80 md:h-[600px] rounded-full"
         style={{
           background:
             'radial-gradient(circle, rgba(120,80,255,0.09) 0%, transparent 70%)',
@@ -44,7 +44,7 @@ function GridBackground() {
         transition={{ duration: 22, repeat: Infinity, ease: 'easeInOut' }}
       />
       <motion.div
-        className="absolute bottom-0 left-1/3 w-[500px] h-[500px] rounded-full"
+        className="absolute bottom-0 left-1/4 sm:left-1/3 w-32 sm:w-72 md:w-[500px] h-32 sm:h-72 md:h-[500px] rounded-full"
         style={{
           background:
             'radial-gradient(circle, rgba(0,200,180,0.07) 0%, transparent 70%)',
