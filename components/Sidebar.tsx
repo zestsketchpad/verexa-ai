@@ -91,7 +91,7 @@ export default function Sidebar() {
               )}
             >
               <item.icon className="w-4 h-4 sm:w-5 sm:h-5" />
-              <span className="hidden sm:inline">{item.name}</span>
+              <span>{item.name}</span>
             </Link>
           ))}
         </div>
@@ -101,7 +101,7 @@ export default function Sidebar() {
           className="mx-1 sm:mx-2 bg-gradient-to-r from-primary to-primary-container text-on-primary font-semibold py-2.5 sm:py-3 px-3 sm:px-4 rounded-lg sm:rounded-xl flex items-center justify-center gap-1.5 sm:gap-2 shadow-lg shadow-primary/20 hover:scale-[1.02] transition-transform text-xs sm:text-sm"
         >
           <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-          <span className="hidden sm:inline">New Agent</span>
+          <span>New Agent</span>
         </button>
 
         <div className="mt-4 sm:mt-6 pt-3 sm:pt-4 border-t border-white/5">
