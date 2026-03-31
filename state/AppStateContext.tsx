@@ -49,10 +49,10 @@ function readStorage<T>(key: string, fallback: T): T {
 
 function normalizeSettings(raw: unknown): AppSettings {
   const candidate = (raw && typeof raw === 'object' ? raw : {}) as Partial<AppSettings>;
-  const api = candidate.api || {};
-  const policy = candidate.policy || {};
-  const execution = candidate.execution || {};
-  const integrations = candidate.integrations || {};
+  const api: Partial<AppSettings['api']> = candidate.api ?? {};
+  const policy: Partial<AppSettings['policy']> = candidate.policy ?? {};
+  const execution: Partial<AppSettings['execution']> = candidate.execution ?? {};
+  const integrations: Partial<AppSettings['integrations']> = candidate.integrations ?? {};
 
   const integrationUrlRaw =
     typeof integrations.n8nWebhookUrl === 'string' ? integrations.n8nWebhookUrl.trim() : '';
