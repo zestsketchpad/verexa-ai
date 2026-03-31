@@ -1,428 +1,243 @@
-import { FormEvent, useMemo, useState } from 'react';
-import { motion } from 'motion/react';
+import { useEffect, useMemo, useState } from 'react';
 import { useUser } from '@clerk/clerk-react';
-import {
-  Mail,
-  ArrowRight,
-  Wand2,
-  Sparkles,
-  ShieldAlert,
-  CheckCircle2,
-} from 'lucide-react';
 import Sidebar from '../components/Sidebar';
-import { cn } from '../lib/utils';
 import { useAppState } from '../state/AppStateContext';
-import { handleActionWithMeta, toFailureHistoryItem, toHistoryItem } from '../lib/actionEngine';
-import { postActionWebhook } from '../lib/webhook';
-import type { ActionResult, ActionToolSelection } from '../types';
 
-const TOOL_OPTIONS: Array<{ value: ActionToolSelection; label: string }> = [
-  { value: 'auto', label: 'Auto' },
-  { value: 'system', label: 'System' },
-  { value: 'email', label: 'Email' },
-  { value: 'code', label: 'Code' },
-  { value: 'research', label: 'Research' },
-];
+const FIXED_WEBHOOK = 'https://zenn06.app.n8n.cloud/webhook/verexa-action';
+const STEPS = [
+  ['VALIDATE', 'input check'],
+  ['CLASSIFY', 'task type'],
+  ['GENERATE', 'gpt-4o-mini'],
+  ['VERIFY', 'gemini-2.0-flash'],
+  ['SCORE', '+ improve'],
+  ['RESPOND', 'verified output'],
+] as const;
+const STATUS = [
+  'Validating your input...',
+  'Classifying task type...',
+  'GPT-4o-mini generating response...',
+  'Gemini verifying and improving...',
+  'Scoring and parsing...',
+  'Sending verified response...',
+] as const;
 
-function riskBadgeClass(score: number) {
-  if (score < 30) {
-    return 'bg-green-500/10 border-green-500/20 text-green-400';
+type ResultData = {
+  taskType: string;
+  originalResponse: string;
+  verifiedResponse: string;
+  verification: {
+    score: number;
+    grade: string;
+    badge: string;
+    verdict: string;
+    confidence: number;
+    issues: string[];
+    fixes: string[];
+  };
+};
+
+const box = 'border border-[#1a2030] bg-[#0d1014]';
+const mono = { fontFamily: '"JetBrains Mono", monospace' };
+
+function obj(value: unknown): Record<string, unknown> | null {
+  return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : null;
+}
+
+function str(value: unknown, fallback = '') {
+  return typeof value === 'string' ? value : fallback;
+}
+
+function num(value: unknown, fallback = 0) {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string') {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
   }
-  if (score <= 70) {
-    return 'bg-tertiary/10 border-tertiary/20 text-tertiary';
-  }
-  return 'bg-error/10 border-error/20 text-error';
+  return fallback;
+}
+
+function list(value: unknown) {
+  return Array.isArray(value) ? value.map((item) => str(item).trim()).filter(Boolean) : [];
+}
+
+function text(value: unknown) {
+  if (typeof value === 'string') return value;
+  const record = obj(value);
+  if (!record) return '';
+  return str(record.response) || str(record.content) || str(record.text) || str(record.message);
+}
+
+function normalize(data: unknown): ResultData {
+  const payload = obj(data) ?? {};
+  const verification = obj(payload.verification) ?? obj(payload.result) ?? {};
+  return {
+    taskType: str(payload.taskType) || str(payload.task_type) || str(payload.type) || 'general',
+    originalResponse: text(payload.original) || text(payload.original_response) || text(payload.generated) || '—',
+    verifiedResponse: text(payload.verified_response) || text(payload.verified) || text(payload.final) || '—',
+    verification: {
+      score: num(verification.score),
+      grade: str(verification.grade, '--'),
+      badge: str(verification.badge, '--'),
+      verdict: str(verification.verdict, 'No verdict returned.'),
+      confidence: num(verification.confidence),
+      issues: list(verification.issues_found),
+      fixes: list(verification.improvements_made),
+    },
+  };
+}
+
+function scoreTone(score: number) {
+  if (score >= 80) return 'border-green-500 text-green-500';
+  if (score >= 65) return 'border-lime-400 text-lime-400';
+  if (score >= 45) return 'border-amber-500 text-amber-500';
+  return 'border-red-500 text-red-500';
 }
 
 export default function DashboardPage() {
-  const { actions, addAction, settings } = useAppState();
   const { user, isLoaded } = useUser();
-  const [input, setInput] = useState('');
-  const [selectedTool, setSelectedTool] = useState<ActionToolSelection>('auto');
-  const [action, setAction] = useState<ActionResult | null>(null);
-  const [isThinking, setIsThinking] = useState(false);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const { settings, setSettings } = useAppState();
+  const [prompt, setPrompt] = useState('');
+  const [running, setRunning] = useState(false);
+  const [step, setStep] = useState(0);
+  const [error, setError] = useState('');
+  const [result, setResult] = useState<ResultData | null>(null);
 
-  const metrics = useMemo(() => {
-    const total = actions.length;
-    const executed = actions.filter((item) => item.status === 'Executed').length;
-    const blocked = actions.filter((item) => item.decision === 'BLOCK').length;
-    return { total, executed, blocked };
-  }, [actions]);
+  useEffect(() => {
+    if (settings.integrations.n8nWebhookUrl !== FIXED_WEBHOOK) {
+      setSettings((prev) => ({ ...prev, integrations: { ...prev.integrations, n8nWebhookUrl: FIXED_WEBHOOK } }));
+    }
+  }, [setSettings, settings.integrations.n8nWebhookUrl]);
 
-  const sendBlockedByRisk =
-    Boolean(action) && settings.policy.blockHighRiskActions && action.risk_score > 70;
-  const sendBlockedByEmail =
-    Boolean(action) && action.type === 'email' && !settings.execution.enableEmailSending;
-  const sendDisabled = !action || sendBlockedByRisk || sendBlockedByEmail;
+  useEffect(() => {
+    if (!running) return;
+    setStep(0);
+    const timer = window.setInterval(() => setStep((value) => Math.min(value + 1, STEPS.length - 1)), 1800);
+    return () => window.clearInterval(timer);
+  }, [running]);
 
-  async function handleAction(inputValue: string) {
+  const status = useMemo(() => (running ? STATUS[Math.min(step, STATUS.length - 1)] : ''), [running, step]);
+
+  async function runVerexa() {
+    const cleanPrompt = prompt.trim();
+    setError('');
+    setResult(null);
+    if (!cleanPrompt) return setError('ERROR: Please enter a prompt.');
+    setRunning(true);
+    setSettings((prev) => ({ ...prev, integrations: { ...prev.integrations, n8nWebhookUrl: FIXED_WEBHOOK } }));
     try {
-      setIsThinking(true);
-      setError(null);
-      setSuccessMessage(null);
-
-      const next = await handleActionWithMeta(inputValue, settings.integrations.n8nWebhookUrl, {
-        userId: user?.id,
-        email: user?.primaryEmailAddress?.emailAddress,
-        tool: selectedTool,
+      const response = await fetch(FIXED_WEBHOOK, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: cleanPrompt, userId: user?.id || 'verexa-demo' }),
       });
-
-      console.log('API Response:', next);
-
-      if (!next || !next.content) {
-        throw new Error('Invalid response from server');
-      }
-
-      setAction(next);
-      addAction(toHistoryItem(next, 'Created'));
-      setInput('');
-      setSuccessMessage('Action created from webhook response.');
+      if (!response.ok) throw new Error(`HTTP ${response.status}: ${await response.text()}`);
+      setResult(normalize(await response.json()));
+      setStep(STEPS.length - 1);
     } catch (err) {
-      console.error(err);
-      const detail = err instanceof Error ? err.message : 'Webhook request failed.';
-      addAction(toFailureHistoryItem(inputValue, detail));
-      setError('Failed to process request');
+      setError(`PIPELINE ERROR: ${err instanceof Error ? err.message : 'Request failed.'}`);
+      setStep(0);
     } finally {
-      setIsThinking(false);
+      setRunning(false);
     }
   }
 
-  async function onSubmit(event: FormEvent) {
-    event.preventDefault();
-    const value = input.trim();
-    if (!value) {
-      return;
-    }
-    await handleAction(value);
-  }
-
-  async function onSend() {
-    if (!action || sendDisabled) {
-      return;
-    }
-
-    addAction(toHistoryItem(action, 'Executed'));
-    const webhook = await postActionWebhook({
-      webhookUrl: settings.integrations.n8nWebhookUrl,
-      event: 'execute_action',
-      input: action.input,
-      action,
-    });
-
-    if (webhook.ok) {
-      setSuccessMessage('Executed and delivered to webhook.');
-    } else {
-      addAction(toFailureHistoryItem(action.input, `Execution webhook failed: ${webhook.error || 'unknown error'}`));
-      setError(`Executed locally. Webhook failed: ${webhook.error || 'unknown error'}`);
-    }
-  }
-
-  async function onFix() {
-    if (!action) {
-      return;
-    }
-    const improved = action.content_improved || action.improved_version || action.content;
-    const fixed: ActionResult = {
-      ...action,
-      content: improved,
-      content_final: improved,
-      content_improved: improved,
-      improved_version: improved,
-    };
-    setAction(fixed);
-    addAction(toHistoryItem(fixed, 'Fixed'));
-
-    const webhook = await postActionWebhook({
-      webhookUrl: settings.integrations.n8nWebhookUrl,
-      event: 'fix_action',
-      input: fixed.input,
-      action: fixed,
-    });
-
-    if (webhook.ok) {
-      setSuccessMessage('Action improved.');
-    } else {
-      const detail = webhook.error || `Webhook returned ${webhook.status}`;
-      addAction(toFailureHistoryItem(fixed.input, `Fix webhook failed: ${detail}`));
-      setError(`Action improved locally. Webhook failed: ${detail}`);
-    }
-  }
-
-  async function onReject() {
-    if (!action) {
-      return;
-    }
-
-    addAction(toHistoryItem(action, 'Rejected'));
-    const webhook = await postActionWebhook({
-      webhookUrl: settings.integrations.n8nWebhookUrl,
-      event: 'reject_action',
-      input: action.input,
-      action,
-    });
-
-    if (!webhook.ok) {
-      const detail = webhook.error || `Webhook returned ${webhook.status}`;
-      addAction(toFailureHistoryItem(action.input, `Reject webhook failed: ${detail}`));
-    }
-
-    setAction(null);
-    setSuccessMessage('Action rejected.');
-  }
-
-  if (!isLoaded) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center text-on-surface-variant">
-        Loading user...
-      </div>
-    );
-  }
+  if (!isLoaded) return <div className="min-h-screen bg-background flex items-center justify-center text-on-surface-variant">Loading user...</div>;
 
   return (
-    <div className="min-h-screen bg-background flex">
+    <div className="min-h-screen bg-[#070809] flex text-[#e2e8f0]" style={{ fontFamily: '"Space Grotesk", sans-serif' }}>
       <Sidebar />
+      <main className="lg:ml-64 flex-grow px-4 pb-8 pt-24 lg:pt-8">
+        <div className="mx-auto max-w-[980px]">
+          <header className="mb-12 flex flex-wrap items-center gap-4 border-b border-[#1a2030] pb-6">
+            <div className="flex h-10 w-10 items-center justify-center rounded-[10px] bg-gradient-to-br from-[#3b82f6] to-[#8b5cf6] text-[18px] font-extrabold text-white">V</div>
+            <div className="text-[22px] font-bold tracking-[-0.5px]"><span className="text-[#3b82f6]">Verexa</span> AI</div>
+            <div className="rounded-full border border-[#3b82f633] bg-[#3b82f61a] px-3 py-1 text-[10px] text-[#3b82f6]" style={mono}>GPT-4o-mini to Gemini 2.0 Flash</div>
+            <div className="ml-auto text-[11px] tracking-[1px] text-slate-500" style={mono}>MULTI-MODEL VERIFICATION ENGINE</div>
+          </header>
 
-      <main className="lg:ml-64 p-4 md:p-8 flex-grow flex flex-col pt-24 lg:pt-8">
-        <header className="flex flex-col md:flex-row justify-between items-start md:items-end mb-8 md:mb-12 gap-6">
-          <div className="space-y-1">
-            <h2 className="text-3xl md:text-4xl font-headline font-extrabold tracking-tight text-white">
-              Orchestration Hub
-            </h2>
-            <p className="text-on-surface-variant font-medium text-sm md:text-base">
-              AI action chat + risk control + webhook execution.
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-3 md:gap-4 w-full md:w-auto">
-            {[
-              { label: 'Total Actions', value: `${metrics.total}`, color: 'text-primary' },
-              { label: 'Executed', value: `${metrics.executed}`, color: 'text-green-400' },
-              { label: 'Blocked', value: `${metrics.blocked}`, color: 'text-tertiary' },
-            ].map((stat, i) => (
-              <div
-                key={i}
-                className="glass-card flex-1 md:flex-none px-4 md:px-6 py-3 md:py-4 rounded-xl border border-white/5 flex flex-col min-w-[120px]"
-              >
-                <span className="text-[9px] md:text-[10px] uppercase tracking-widest text-slate-500 font-label mb-1">
-                  {stat.label}
-                </span>
-                <span className={cn('text-xl md:text-2xl font-headline font-bold', stat.color)}>
-                  {stat.value}
-                </span>
-              </div>
-            ))}
-          </div>
-        </header>
-
-        {successMessage && (
-          <div className="mb-5 p-3 rounded-xl border border-primary/20 bg-primary/10 text-primary text-sm">
-            {successMessage}
-          </div>
-        )}
-
-        {error && (
-          <div className="mb-5 p-3 rounded-xl border border-error/20 bg-error/10 text-error text-sm">
-            {error}
-          </div>
-        )}
-
-        <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 md:gap-8 flex-grow">
-          <section className="xl:col-span-8 flex flex-col">
-            <motion.div
-              initial={{ opacity: 0, y: 16 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="glass-card rounded-xl border border-white/5 overflow-hidden flex flex-col shadow-2xl"
-            >
-              <div className="px-4 md:px-6 py-3 md:py-4 border-b border-white/5 flex flex-col sm:flex-row justify-between items-start sm:items-center bg-surface-container-low/50 gap-2">
-                <div className="flex items-center gap-3">
-                  <Mail className="w-5 h-5 text-primary" />
-                  <span className="font-headline font-semibold text-white text-sm md:text-base">
-                    {action?.type ? `${action.type.toUpperCase()} Action` : 'Action Result'}
-                  </span>
+          <div className="mb-8 flex overflow-x-auto py-4">
+            {STEPS.map(([label, model], index) => {
+              const active = running && index === step;
+              const done = running ? index < step : Boolean(result);
+              return (
+                <div key={label} className="flex items-center">
+                  <div className="flex min-w-fit flex-col items-center gap-1.5">
+                    <div className={`rounded-[10px] border px-4 py-2.5 text-[11px] font-semibold tracking-[0.5px] ${active ? 'border-[#3b82f6] bg-[#3b82f614] shadow-[0_0_20px_rgba(59,130,246,0.15)]' : done ? 'border-green-500 bg-green-500/10' : 'border-[#1a2030] bg-[#0d1014]'}`}>{label}</div>
+                    <div className="text-[9px] tracking-[1px] text-slate-500" style={mono}>{model}</div>
+                  </div>
+                  {index < STEPS.length - 1 && <div className="mb-4 h-[2px] w-8 bg-gradient-to-r from-[#1a2030] to-[#2a3a55]" />}
                 </div>
-                <div
-                  className={cn(
-                    'px-3 py-1 rounded-full border text-[10px] font-bold uppercase tracking-widest',
-                    riskBadgeClass(action?.risk_score ?? 0),
-                  )}
-                >
-                  {action ? `Risk ${action.risk_score} - ${action.decision}` : 'No Action Yet'}
+              );
+            })}
+          </div>
+
+          <div className="mb-6">
+            <div className="mb-2 flex items-center gap-2 text-[12px] tracking-[1px] text-slate-500" style={mono}>
+              <span>USER PROMPT</span><div className="h-px flex-1 bg-[#1a2030]" />
+            </div>
+            <textarea className={`${box} min-h-[120px] w-full rounded-xl px-5 py-4 text-[15px] leading-7 outline-none focus:border-[#3b82f6]`} value={prompt} onChange={(event) => setPrompt(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && event.ctrlKey) void runVerexa(); }} placeholder="e.g. Write a Kotlin function to fetch data from a REST API with error handling..." rows={5} />
+          </div>
+
+          <button className="mb-8 w-full rounded-xl bg-gradient-to-br from-[#3b82f6] to-[#8b5cf6] px-4 py-4 text-[15px] font-bold tracking-[0.5px] text-white transition hover:-translate-y-px disabled:cursor-not-allowed disabled:opacity-60 disabled:transform-none" onClick={() => void runVerexa()} disabled={running}>
+            {running ? 'Running Verification Pipeline...' : 'Run Verexa Verification Pipeline'}
+          </button>
+
+          {running && <div className="mb-6 flex items-center gap-3 rounded-xl border border-[#3b82f633] bg-[#3b82f610] px-4 py-3 text-[12px] text-[#3b82f6]" style={mono}><div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-[#3b82f633] border-t-[#3b82f6]" />{status}</div>}
+          {error && <div className="mb-6 rounded-xl border border-red-500/20 bg-red-500/10 px-5 py-4 text-[12px] text-red-300" style={mono}>{error}</div>}
+
+          {result && (
+            <>
+              <div className="mb-3 flex items-center gap-2 text-[11px] tracking-[2px] text-slate-500" style={mono}><span>VERIFICATION RESULT</span><div className="h-px flex-1 bg-[#1a2030]" /></div>
+              <div className={`${box} mb-5 rounded-2xl p-5 sm:p-7`}>
+                <div className="flex flex-col gap-5 lg:grid lg:grid-cols-[auto_minmax(0,1fr)_auto] lg:items-start">
+                  <div className={`flex h-20 w-20 flex-col items-center justify-center rounded-full border-[3px] ${scoreTone(result.verification.score)}`}>
+                    <div className="text-[26px] font-extrabold leading-none">{result.verification.score}</div>
+                    <div className="mt-0.5 text-[9px] tracking-[1px]" style={mono}>SCORE</div>
+                  </div>
+                  <div className="min-w-0 space-y-2">
+                    <div className="text-[13px] text-slate-500" style={mono}>Grade: <b className="text-[#e2e8f0]">{result.verification.grade}</b> | Badge: <b className="text-[#e2e8f0]">{result.verification.badge}</b></div>
+                    <div className="text-[13px] leading-6 text-slate-400 break-words">{result.verification.verdict}</div>
+                  </div>
+                  <div className="flex flex-col items-start gap-2 lg:items-end lg:justify-self-end">
+                    <div className="rounded-full border border-violet-500/20 bg-violet-500/10 px-3 py-1 text-[11px] uppercase tracking-[1px] text-violet-400" style={mono}>{result.taskType.toUpperCase()}</div>
+                    <div className="text-[11px] text-slate-500" style={mono}>Confidence: {result.verification.confidence}%</div>
+                  </div>
+                </div>
+                <div className="mt-4 grid gap-3 lg:grid-cols-2">
+                  <div className="rounded-xl border border-red-400/15 bg-red-500/5 p-3">
+                    <div className="mb-2 text-[10px] tracking-[1px] text-red-300" style={mono}>ISSUES</div>
+                    <div className="flex flex-wrap gap-2">{result.verification.issues.map((item) => <span key={item} className="max-w-full rounded-md border border-red-400/15 bg-red-500/10 px-2.5 py-1 text-[11px] text-red-300 whitespace-normal break-words" style={mono}>ISSUE {item}</span>)}</div>
+                  </div>
+                  <div className="rounded-xl border border-green-400/15 bg-green-500/5 p-3">
+                    <div className="mb-2 text-[10px] tracking-[1px] text-green-300" style={mono}>IMPROVEMENTS</div>
+                    <div className="flex flex-wrap gap-2">{result.verification.fixes.map((item) => <span key={item} className="max-w-full rounded-md border border-green-400/15 bg-green-500/10 px-2.5 py-1 text-[11px] text-green-300 whitespace-normal break-words" style={mono}>FIX {item}</span>)}</div>
+                  </div>
                 </div>
               </div>
-              <div className="p-4 md:p-6">
-                {action ? (
-                  <div className="space-y-4">
-                    <div className="space-y-3">
-                      <div className="rounded-lg border border-white/10 bg-surface-container-low/40 p-4">
-                        <p className="text-[10px] uppercase tracking-widest text-slate-500 mb-2">
-                          Final
-                        </p>
-                        <p className="text-on-surface-variant whitespace-pre-wrap text-sm leading-relaxed">
-                          {action?.content_final || action?.content}
-                        </p>
-                      </div>
-                      {action?.content_original && (
-                        <div className="rounded-lg border border-white/10 bg-surface-container-low/25 p-4">
-                          <p className="text-[10px] uppercase tracking-widest text-slate-500 mb-2">
-                            Original
-                          </p>
-                          <p className="text-on-surface-variant whitespace-pre-wrap text-sm leading-relaxed">
-                            {action?.content_original}
-                          </p>
-                        </div>
-                      )}
-                      {action?.content_improved && (
-                        <div className="rounded-lg border border-white/10 bg-surface-container-low/25 p-4">
-                          <p className="text-[10px] uppercase tracking-widest text-slate-500 mb-2">
-                            Improved
-                          </p>
-                          <p className="text-on-surface-variant whitespace-pre-wrap text-sm leading-relaxed">
-                            {action?.content_improved}
-                          </p>
-                        </div>
-                      )}
+
+              <div className="mb-3 flex items-center gap-2 text-[11px] tracking-[2px] text-slate-500" style={mono}><span>RESPONSE COMPARISON</span><div className="h-px flex-1 bg-[#1a2030]" /></div>
+              <div className="mb-5 grid gap-4 md:grid-cols-2">
+                {[
+                  ['ORIGINAL', 'gpt-4o-mini', '#f59e0b', result.originalResponse, false],
+                  ['VERIFIED AND IMPROVED', 'gemini-2.0-flash', '#3b82f6', result.verifiedResponse, true],
+                ].map(([title, model, color, body, verified]) => (
+                  <div key={title as string} className={`${box} ${verified ? 'border-[#3b82f64d]' : ''} overflow-hidden rounded-2xl`}>
+                    <div className="flex items-center gap-2 border-b border-[#1a2030] bg-white/[0.02] px-4 py-3">
+                      <div className="h-2 w-2 rounded-full" style={{ background: color as string }} />
+                      <div className="text-[12px] font-bold tracking-[0.5px]">{title}</div>
+                      <div className="ml-auto text-[10px] text-slate-500" style={mono}>{model}</div>
                     </div>
-                    <div className="flex flex-wrap gap-3 pt-2">
-                      <button
-                        onClick={onReject}
-                        className="px-4 py-2 rounded-full border border-outline-variant/30 text-on-surface text-xs font-semibold hover:bg-white/5"
-                      >
-                        Reject
-                      </button>
-                      <button
-                        onClick={onFix}
-                        className="px-4 py-2 rounded-full bg-primary/10 text-primary border border-primary/20 text-xs font-semibold hover:bg-primary/20 flex items-center gap-2"
-                      >
-                        <Wand2 className="w-3.5 h-3.5" />
-                        Fix
-                      </button>
-                      <button
-                        onClick={onSend}
-                        disabled={sendDisabled}
-                        className="px-4 py-2 rounded-full bg-primary text-on-primary text-xs font-bold hover:opacity-90 disabled:opacity-50"
-                      >
-                        Send
-                      </button>
-                    </div>
-                    {sendBlockedByRisk && (
-                      <p className="text-xs text-tertiary">
-                        Send disabled: high-risk action blocked by policy setting.
-                      </p>
-                    )}
-                    {sendBlockedByEmail && (
-                      <p className="text-xs text-tertiary">
-                        Send disabled: email execution is disabled in settings.
-                      </p>
-                    )}
+                    <div className="max-h-80 overflow-y-auto whitespace-pre-wrap px-4 py-4 text-[13px] leading-7 text-slate-300" style={mono}>{body}</div>
                   </div>
-                ) : (
-                  <div className="py-10 text-center text-on-surface-variant text-sm">
-                    Start by typing a request in chat below.
-                  </div>
-                )}
+                ))}
               </div>
-            </motion.div>
+            </>
+          )}
 
-            <form onSubmit={onSubmit} className="mt-6">
-              <div className="glass-card rounded-xl border border-white/10 p-2 flex items-center gap-3">
-                <select
-                  value={selectedTool}
-                  onChange={(event) => setSelectedTool(event.target.value as ActionToolSelection)}
-                  disabled={isThinking}
-                  className="bg-surface-container-low/60 text-slate-200 text-xs md:text-sm rounded-lg border border-white/10 px-3 py-2 outline-none disabled:opacity-60"
-                >
-                  {TOOL_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-                <input
-                  value={input}
-                  onChange={(event) => setInput(event.target.value)}
-                  disabled={isThinking}
-                  className="flex-1 bg-transparent px-4 py-3 text-white text-sm outline-none placeholder:text-slate-600"
-                  placeholder='Try: "Send delay email to client"'
-                />
-                <button
-                  type="submit"
-                  disabled={isThinking || !input.trim()}
-                  className="w-10 h-10 rounded-full bg-primary text-on-primary flex items-center justify-center disabled:opacity-50"
-                >
-                  <ArrowRight className="w-4 h-4" />
-                </button>
-              </div>
-              {isThinking && <p className="text-xs text-slate-500 mt-2">Analyzing...</p>}
-            </form>
-          </section>
-
-          <aside className="xl:col-span-4 space-y-4">
-            <div className="glass-card rounded-xl border border-white/10 p-5">
-              <h3 className="text-white font-headline font-bold mb-3">Risk Score</h3>
-              <p className="text-3xl font-bold text-white">{action ? action.risk_score : '--'}</p>
-              <div className="h-1.5 w-full bg-surface-container-highest rounded-full overflow-hidden mt-3">
-                <div
-                  className={cn(
-                    'h-full',
-                    (action?.risk_score ?? 0) < 30
-                      ? 'bg-green-500'
-                      : (action?.risk_score ?? 0) <= 70
-                        ? 'bg-tertiary'
-                        : 'bg-error',
-                  )}
-                  style={{ width: `${action?.risk_score ?? 0}%` }}
-                />
-              </div>
-            </div>
-
-            <div className="glass-card rounded-xl border border-white/10 p-5">
-              <h3 className="text-white font-headline font-bold mb-3">Decision</h3>
-              <p className="text-sm text-on-surface-variant">
-                {action ? action.decision : 'No decision yet'}
-              </p>
-            </div>
-
-            <div className="glass-card rounded-xl border border-white/10 p-5">
-              <h3 className="text-white font-headline font-bold mb-3">Simulation</h3>
-              {action ? (
-                <div className="space-y-2 text-sm text-on-surface-variant">
-                  <p>{action?.simulation?.client_reaction}</p>
-                  <p className="text-xs text-slate-400 uppercase tracking-widest">
-                    Trust: {action?.simulation?.trust_impact}
-                  </p>
-                  <div className="flex items-center gap-2 text-xs text-slate-300">
-                    <Sparkles className="w-3.5 h-3.5 text-primary" />
-                    Risk level: {action?.simulation?.risk_level}
-                  </div>
-                </div>
-              ) : (
-                <p className="text-sm text-on-surface-variant">
-                  Simulation appears after action generation.
-                </p>
-              )}
-            </div>
-
-            <div className="glass-card rounded-xl border border-white/10 p-5">
-              <h3 className="text-white font-headline font-bold mb-3">Issues</h3>
-              {action && action.issues.length > 0 ? (
-                <ul className="space-y-2">
-                  {action.issues.map((issue, idx) => (
-                    <li key={idx} className="text-sm text-on-surface-variant flex items-start gap-2">
-                      {action.decision === 'BLOCK' ? (
-                        <ShieldAlert className="w-4 h-4 text-error mt-0.5" />
-                      ) : (
-                        <CheckCircle2 className="w-4 h-4 text-tertiary mt-0.5" />
-                      )}
-                      {issue}
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="text-sm text-on-surface-variant">No issues yet.</p>
-              )}
-            </div>
-          </aside>
+          <footer className="mt-12 flex flex-wrap items-center justify-between gap-4 border-t border-[#1a2030] pt-8">
+            <div className="text-[11px] text-slate-600" style={mono}>{`© ${new Date().getFullYear()} Verexa AI | Multi-Model Verification Engine`}</div>
+            <div className="rounded-md border border-[#1a2030] bg-white/[0.03] px-3 py-1 text-[10px] text-slate-500" style={mono}>GPT-4o-mini to Gemini 2.0 Flash to Verified Output</div>
+          </footer>
         </div>
       </main>
     </div>

@@ -140,18 +140,10 @@ export default function SettingsPage() {
               <div className="rounded-lg border border-white/10 bg-surface-container-low/40 p-3">
                 <p className="text-sm text-on-surface">Gmail (Coming soon)</p>
               </div>
-              <input
-                type="text"
-                value={settings.integrations.n8nWebhookUrl}
-                onChange={(event) =>
-                  setSettings((prev) => ({
-                    ...prev,
-                    integrations: { ...prev.integrations, n8nWebhookUrl: event.target.value },
-                  }))
-                }
-                placeholder="Action API URL (recommended: /api/action)"
-                className="w-full rounded-lg border border-white/10 bg-surface-container-low/40 px-3 py-2 text-sm text-white outline-none placeholder:text-slate-500"
-              />
+              <div className="rounded-lg border border-white/10 bg-surface-container-low/40 px-3 py-2">
+                <p className="text-[11px] uppercase tracking-[1px] text-on-surface-variant">n8n Webhook URL (Fixed)</p>
+                <p className="mt-1 break-all text-sm text-white">https://zenn06.app.n8n.cloud/webhook/verexa-action</p>
+              </div>
             </div>
           </section>
         </div>
