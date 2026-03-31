@@ -3,7 +3,7 @@ import { useUser } from '@clerk/clerk-react';
 import Sidebar from '../components/Sidebar';
 import { useAppState } from '../state/AppStateContext';
 
-const DEFAULT_WEBHOOK = 'https://zenn06.app.n8n.cloud/webhook/verexa-action';
+const FIXED_WEBHOOK = 'https://zenn06.app.n8n.cloud/webhook/verexa-action';
 const STEPS = [
   ['VALIDATE', 'input check'],
   ['CLASSIFY', 'task type'],
@@ -97,15 +97,14 @@ export default function DashboardPage() {
   const { user, isLoaded } = useUser();
   const { settings, setSettings } = useAppState();
   const [prompt, setPrompt] = useState('');
-  const [webhookUrl, setWebhookUrl] = useState(settings.integrations.n8nWebhookUrl || DEFAULT_WEBHOOK);
   const [running, setRunning] = useState(false);
   const [step, setStep] = useState(0);
   const [error, setError] = useState('');
   const [result, setResult] = useState<ResultData | null>(null);
 
   useEffect(() => {
-    if (!settings.integrations.n8nWebhookUrl) {
-      setSettings((prev) => ({ ...prev, integrations: { ...prev.integrations, n8nWebhookUrl: DEFAULT_WEBHOOK } }));
+    if (settings.integrations.n8nWebhookUrl !== FIXED_WEBHOOK) {
+      setSettings((prev) => ({ ...prev, integrations: { ...prev.integrations, n8nWebhookUrl: FIXED_WEBHOOK } }));
     }
   }, [setSettings, settings.integrations.n8nWebhookUrl]);
 
@@ -120,15 +119,13 @@ export default function DashboardPage() {
 
   async function runVerexa() {
     const cleanPrompt = prompt.trim();
-    const cleanWebhook = webhookUrl.trim();
     setError('');
     setResult(null);
     if (!cleanPrompt) return setError('ERROR: Please enter a prompt.');
-    if (!cleanWebhook) return setError('ERROR: Please enter your n8n webhook URL above.');
     setRunning(true);
-    setSettings((prev) => ({ ...prev, integrations: { ...prev.integrations, n8nWebhookUrl: cleanWebhook } }));
+    setSettings((prev) => ({ ...prev, integrations: { ...prev.integrations, n8nWebhookUrl: FIXED_WEBHOOK } }));
     try {
-      const response = await fetch(cleanWebhook, {
+      const response = await fetch(FIXED_WEBHOOK, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt: cleanPrompt, userId: user?.id || 'verexa-demo' }),
@@ -147,7 +144,7 @@ export default function DashboardPage() {
   if (!isLoaded) return <div className="min-h-screen bg-background flex items-center justify-center text-on-surface-variant">Loading user...</div>;
 
   return (
-    <div className="min-h-screen bg-[#070809] flex text-[#e2e8f0]" style={{ fontFamily: '"Syne", sans-serif' }}>
+    <div className="min-h-screen bg-[#070809] flex text-[#e2e8f0]" style={{ fontFamily: '"Space Grotesk", sans-serif' }}>
       <Sidebar />
       <main className="lg:ml-64 flex-grow px-4 pb-8 pt-24 lg:pt-8">
         <div className="mx-auto max-w-[980px]">
@@ -157,11 +154,6 @@ export default function DashboardPage() {
             <div className="rounded-full border border-[#3b82f633] bg-[#3b82f61a] px-3 py-1 text-[10px] text-[#3b82f6]" style={mono}>GPT-4o-mini to Gemini 2.0 Flash</div>
             <div className="ml-auto text-[11px] tracking-[1px] text-slate-500" style={mono}>MULTI-MODEL VERIFICATION ENGINE</div>
           </header>
-
-          <div className={`${box} mb-6 flex flex-wrap items-center gap-3 rounded-xl px-5 py-4`}>
-            <div className="text-[11px] tracking-[1px] text-slate-500" style={mono}>WEBHOOK URL</div>
-            <input className="min-w-[260px] flex-1 rounded-lg border border-[#1a2030] bg-white/5 px-3 py-2 text-[12px] text-[#e2e8f0] outline-none focus:border-[#3b82f6]" style={mono} value={webhookUrl} onChange={(event) => setWebhookUrl(event.target.value)} placeholder={DEFAULT_WEBHOOK} />
-          </div>
 
           <div className="mb-8 flex overflow-x-auto py-4">
             {STEPS.map(([label, model], index) => {
@@ -196,20 +188,30 @@ export default function DashboardPage() {
           {result && (
             <>
               <div className="mb-3 flex items-center gap-2 text-[11px] tracking-[2px] text-slate-500" style={mono}><span>VERIFICATION RESULT</span><div className="h-px flex-1 bg-[#1a2030]" /></div>
-              <div className={`${box} mb-5 grid gap-6 rounded-2xl p-7 md:grid-cols-[auto_1fr_auto]`}>
-                <div className={`flex h-20 w-20 flex-col items-center justify-center rounded-full border-[3px] ${scoreTone(result.verification.score)}`}>
-                  <div className="text-[26px] font-extrabold leading-none">{result.verification.score}</div>
-                  <div className="mt-0.5 text-[9px] tracking-[1px]" style={mono}>SCORE</div>
+              <div className={`${box} mb-5 rounded-2xl p-5 sm:p-7`}>
+                <div className="flex flex-col gap-5 lg:grid lg:grid-cols-[auto_minmax(0,1fr)_auto] lg:items-start">
+                  <div className={`flex h-20 w-20 flex-col items-center justify-center rounded-full border-[3px] ${scoreTone(result.verification.score)}`}>
+                    <div className="text-[26px] font-extrabold leading-none">{result.verification.score}</div>
+                    <div className="mt-0.5 text-[9px] tracking-[1px]" style={mono}>SCORE</div>
+                  </div>
+                  <div className="min-w-0 space-y-2">
+                    <div className="text-[13px] text-slate-500" style={mono}>Grade: <b className="text-[#e2e8f0]">{result.verification.grade}</b> | Badge: <b className="text-[#e2e8f0]">{result.verification.badge}</b></div>
+                    <div className="text-[13px] leading-6 text-slate-400 break-words">{result.verification.verdict}</div>
+                  </div>
+                  <div className="flex flex-col items-start gap-2 lg:items-end lg:justify-self-end">
+                    <div className="rounded-full border border-violet-500/20 bg-violet-500/10 px-3 py-1 text-[11px] uppercase tracking-[1px] text-violet-400" style={mono}>{result.taskType.toUpperCase()}</div>
+                    <div className="text-[11px] text-slate-500" style={mono}>Confidence: {result.verification.confidence}%</div>
+                  </div>
                 </div>
-                <div className="flex flex-col gap-2">
-                  <div className="text-[13px] text-slate-500" style={mono}>Grade: <b className="text-[#e2e8f0]">{result.verification.grade}</b> | Badge: <b className="text-[#e2e8f0]">{result.verification.badge}</b></div>
-                  <div className="text-[13px] leading-6 text-slate-400">{result.verification.verdict}</div>
-                  <div className="mt-1 flex flex-wrap gap-2">{result.verification.issues.map((item) => <span key={item} className="rounded-md border border-red-400/15 bg-red-500/10 px-2.5 py-1 text-[11px] text-red-300" style={mono}>ISSUE {item}</span>)}</div>
-                </div>
-                <div className="flex flex-col items-start gap-2 md:items-end">
-                  <div className="rounded-full border border-violet-500/20 bg-violet-500/10 px-3 py-1 text-[11px] uppercase tracking-[1px] text-violet-400" style={mono}>{result.taskType.toUpperCase()}</div>
-                  <div className="text-[11px] text-slate-500" style={mono}>Confidence: {result.verification.confidence}%</div>
-                  <div className="mt-1 flex flex-wrap gap-2 md:justify-end">{result.verification.fixes.map((item) => <span key={item} className="rounded-md border border-green-400/15 bg-green-500/10 px-2.5 py-1 text-[11px] text-green-300" style={mono}>FIX {item}</span>)}</div>
+                <div className="mt-4 grid gap-3 lg:grid-cols-2">
+                  <div className="rounded-xl border border-red-400/15 bg-red-500/5 p-3">
+                    <div className="mb-2 text-[10px] tracking-[1px] text-red-300" style={mono}>ISSUES</div>
+                    <div className="flex flex-wrap gap-2">{result.verification.issues.map((item) => <span key={item} className="max-w-full rounded-md border border-red-400/15 bg-red-500/10 px-2.5 py-1 text-[11px] text-red-300 whitespace-normal break-words" style={mono}>ISSUE {item}</span>)}</div>
+                  </div>
+                  <div className="rounded-xl border border-green-400/15 bg-green-500/5 p-3">
+                    <div className="mb-2 text-[10px] tracking-[1px] text-green-300" style={mono}>IMPROVEMENTS</div>
+                    <div className="flex flex-wrap gap-2">{result.verification.fixes.map((item) => <span key={item} className="max-w-full rounded-md border border-green-400/15 bg-green-500/10 px-2.5 py-1 text-[11px] text-green-300 whitespace-normal break-words" style={mono}>FIX {item}</span>)}</div>
+                  </div>
                 </div>
               </div>
 

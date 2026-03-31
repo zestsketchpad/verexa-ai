@@ -14,9 +14,7 @@ const AGENTS_KEY = 'agentflow_agents_v1';
 const ACTIONS_KEY = 'agentflow_actions_v1';
 const SETTINGS_KEY = 'agentflow_settings_v1';
 const LEGACY_N8N_WEBHOOK = 'https://xlr8-n8n.app.n8n.cloud/webhook/ai-action';
-const DEFAULT_ACTION_API_URL = (
-  import.meta.env.VITE_ACTION_API_URL || 'https://zenn06.app.n8n.cloud/webhook/verexa-action'
-).trim();
+const DEFAULT_ACTION_API_URL = 'https://zenn06.app.n8n.cloud/webhook/verexa-action';
 
 const defaultSettings: AppSettings = {
   api: {
