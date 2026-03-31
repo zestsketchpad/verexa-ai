@@ -148,42 +148,42 @@ export default function DashboardPage() {
       <Sidebar />
       <main className="lg:ml-64 flex-grow px-3 sm:px-4 md:px-6 pb-6 sm:pb-8 pt-20 sm:pt-24 lg:pt-8">
         <div className="mx-auto max-w-[980px]">
-          <header className="mb-12 flex flex-wrap items-center gap-4 border-b border-[#1a2030] pb-6">
-            <div className="flex h-10 w-10 items-center justify-center rounded-[10px] bg-gradient-to-br from-[#3b82f6] to-[#8b5cf6] text-[18px] font-extrabold text-white">V</div>
-            <div className="text-[22px] font-bold tracking-[-0.5px]"><span className="text-[#3b82f6]">Verexa</span> AI</div>
-            <div className="rounded-full border border-[#3b82f633] bg-[#3b82f61a] px-3 py-1 text-[10px] text-[#3b82f6]" style={mono}>GPT-4o-mini to Gemini 2.0 Flash</div>
-            <div className="ml-auto text-[11px] tracking-[1px] text-slate-500" style={mono}>MULTI-MODEL VERIFICATION ENGINE</div>
+          <header className="mb-8 sm:mb-10 md:mb-12 flex flex-wrap items-center gap-2 sm:gap-3 md:gap-4 border-b border-[#1a2030] pb-4 sm:pb-6">
+            <div className="flex h-8 sm:h-10 w-8 sm:w-10 items-center justify-center rounded-lg sm:rounded-[10px] bg-gradient-to-br from-[#3b82f6] to-[#8b5cf6] text-sm sm:text-lg md:text-[18px] font-extrabold text-white">V</div>
+            <div className="text-base sm:text-lg md:text-[22px] font-bold tracking-[-0.5px]"><span className="text-[#3b82f6]">Verexa</span> AI</div>
+            <div className="hidden sm:inline-block rounded-full border border-[#3b82f633] bg-[#3b82f61a] px-2 sm:px-3 py-0.5 sm:py-1 text-[8px] sm:text-[10px] text-[#3b82f6]" style={mono}>GPT-4o-mini to Gemini 2.0 Flash</div>
+            <div className="ml-auto hidden md:block text-[9px] sm:text-[10px] lg:text-[11px] tracking-[1px] text-slate-500" style={mono}>MULTI-MODEL VERIFICATION ENGINE</div>
           </header>
 
-          <div className="mb-8 flex overflow-x-auto py-4">
+          <div className="mb-6 sm:mb-8 flex overflow-x-auto py-3 sm:py-4">
             {STEPS.map(([label, model], index) => {
               const active = running && index === step;
               const done = running ? index < step : Boolean(result);
               return (
                 <div key={label} className="flex items-center">
-                  <div className="flex min-w-fit flex-col items-center gap-1.5">
-                    <div className={`rounded-[10px] border px-4 py-2.5 text-[11px] font-semibold tracking-[0.5px] ${active ? 'border-[#3b82f6] bg-[#3b82f614] shadow-[0_0_20px_rgba(59,130,246,0.15)]' : done ? 'border-green-500 bg-green-500/10' : 'border-[#1a2030] bg-[#0d1014]'}`}>{label}</div>
-                    <div className="text-[9px] tracking-[1px] text-slate-500" style={mono}>{model}</div>
+                  <div className="flex min-w-fit flex-col items-center gap-1">
+                    <div className={`rounded-lg sm:rounded-[10px] border px-2 sm:px-3 md:px-4 py-1.5 sm:py-2 md:py-2.5 text-[9px] sm:text-[10px] md:text-[11px] font-semibold tracking-[0.5px] ${active ? 'border-[#3b82f6] bg-[#3b82f614] shadow-[0_0_20px_rgba(59,130,246,0.15)]' : done ? 'border-green-500 bg-green-500/10' : 'border-[#1a2030] bg-[#0d1014]'}`}>{label}</div>
+                    <div className="text-[7px] sm:text-[8px] md:text-[9px] tracking-[1px] text-slate-500" style={mono}>{model}</div>
                   </div>
-                  {index < STEPS.length - 1 && <div className="mb-4 h-[2px] w-8 bg-gradient-to-r from-[#1a2030] to-[#2a3a55]" />}
+                  {index < STEPS.length - 1 && <div className="mb-2 sm:mb-3 md:mb-4 h-[2px] w-4 sm:w-6 md:w-8 bg-gradient-to-r from-[#1a2030] to-[#2a3a55]" />}
                 </div>
               );
             })}
           </div>
 
-          <div className="mb-6">
-            <div className="mb-2 flex items-center gap-2 text-[12px] tracking-[1px] text-slate-500" style={mono}>
+          <div className="mb-4 sm:mb-6">
+            <div className="mb-2 flex items-center gap-2 text-[10px] sm:text-[11px] md:text-[12px] tracking-[1px] text-slate-500" style={mono}>
               <span>USER PROMPT</span><div className="h-px flex-1 bg-[#1a2030]" />
             </div>
-            <textarea className={`${box} min-h-[120px] w-full rounded-xl px-5 py-4 text-[15px] leading-7 outline-none focus:border-[#3b82f6]`} value={prompt} onChange={(event) => setPrompt(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && event.ctrlKey) void runVerexa(); }} placeholder="e.g. Write a Kotlin function to fetch data from a REST API with error handling..." rows={5} />
+            <textarea className={`${box} min-h-[100px] sm:min-h-[120px] w-full rounded-lg sm:rounded-xl px-3 sm:px-4 md:px-5 py-3 sm:py-4 text-[13px] sm:text-[14px] md:text-[15px] leading-6 sm:leading-7 outline-none focus:border-[#3b82f6]`} value={prompt} onChange={(event) => setPrompt(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && event.ctrlKey) void runVerexa(); }} placeholder="e.g. Write a Kotlin function to fetch data from a REST API with error handling..." rows={5} />
           </div>
 
-          <button className="mb-8 w-full rounded-xl bg-gradient-to-br from-[#3b82f6] to-[#8b5cf6] px-4 py-4 text-[15px] font-bold tracking-[0.5px] text-white transition hover:-translate-y-px disabled:cursor-not-allowed disabled:opacity-60 disabled:transform-none" onClick={() => void runVerexa()} disabled={running}>
-            {running ? 'Running Verification Pipeline...' : 'Run Verexa Verification Pipeline'}
+          <button className="mb-6 sm:mb-8 w-full rounded-lg sm:rounded-xl bg-gradient-to-br from-[#3b82f6] to-[#8b5cf6] px-4 py-3 sm:py-4 text-[13px] sm:text-[14px] md:text-[15px] font-bold tracking-[0.5px] text-white transition hover:-translate-y-px disabled:cursor-not-allowed disabled:opacity-60 disabled:transform-none" onClick={() => void runVerexa()} disabled={running}>
+            {running ? 'Running Pipeline...' : 'Run Verexa Pipeline'}
           </button>
 
-          {running && <div className="mb-6 flex items-center gap-3 rounded-xl border border-[#3b82f633] bg-[#3b82f610] px-4 py-3 text-[12px] text-[#3b82f6]" style={mono}><div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-[#3b82f633] border-t-[#3b82f6]" />{status}</div>}
-          {error && <div className="mb-6 rounded-xl border border-red-500/20 bg-red-500/10 px-5 py-4 text-[12px] text-red-300" style={mono}>{error}</div>}
+          {running && <div className="mb-4 sm:mb-6 flex items-center gap-2 sm:gap-3 rounded-lg sm:rounded-xl border border-[#3b82f633] bg-[#3b82f610] px-3 sm:px-4 py-2 sm:py-3 text-[10px] sm:text-[11px] md:text-[12px] text-[#3b82f6]" style={mono}><div className="h-3 w-3 sm:h-3.5 sm:w-3.5 animate-spin rounded-full border-2 border-[#3b82f633] border-t-[#3b82f6]" />{status}</div>}
+          {error && <div className="mb-4 sm:mb-6 rounded-lg sm:rounded-xl border border-red-500/20 bg-red-500/10 px-3 sm:px-4 md:px-5 py-3 sm:py-4 text-[10px] sm:text-[11px] md:text-[12px] text-red-300" style={mono}>{error}</div>}
 
           {result && (
             <>

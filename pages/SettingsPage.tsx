@@ -33,17 +33,17 @@ export default function SettingsPage() {
     <div className="min-h-screen bg-background flex">
       <Sidebar />
 
-      <main className="lg:ml-64 p-4 md:p-8 flex-grow pt-24 lg:pt-8">
-        <header className="mb-8">
-          <h2 className="text-3xl md:text-4xl font-headline font-extrabold tracking-tight text-white">
+      <main className="lg:ml-64 p-3 sm:p-4 md:p-6 lg:p-8 flex-grow pt-20 sm:pt-24 lg:pt-8">
+        <header className="mb-6 sm:mb-8">
+          <h2 className="text-2xl sm:text-3xl md:text-4xl font-headline font-extrabold tracking-tight text-white">
             Settings
           </h2>
-          <p className="text-on-surface-variant mt-2 text-sm md:text-base">
+          <p className="text-on-surface-variant mt-1 sm:mt-2 text-xs sm:text-sm md:text-base">
             Configure behavior of the action system.
           </p>
         </header>
 
-        <div className="space-y-6 max-w-4xl">
+        <div className="space-y-4 sm:space-y-6 max-w-4xl">
           <section className="glass-card rounded-xl border border-white/10 p-5">
             <h3 className="text-white font-headline font-bold mb-4">API Settings</h3>
             <div className="space-y-3">

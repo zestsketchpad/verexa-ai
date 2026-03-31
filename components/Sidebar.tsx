@@ -52,9 +52,9 @@ export default function Sidebar() {
     <>
       <button
         onClick={toggleSidebar}
-        className="lg:hidden fixed top-6 left-6 z-[60] p-2 rounded-lg bg-surface-container-high border border-white/10 text-white shadow-lg"
+        className="lg:hidden fixed top-4 sm:top-5 left-4 sm:left-5 z-[60] p-1.5 sm:p-2 rounded-lg bg-surface-container-high border border-white/10 text-white shadow-lg"
       >
-        {isOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+        {isOpen ? <X className="w-5 h-5 sm:w-6 sm:h-6" /> : <Menu className="w-5 h-5 sm:w-6 sm:h-6" />}
       </button>
 
       {isOpen && (
@@ -66,54 +66,54 @@ export default function Sidebar() {
 
       <nav
         className={cn(
-          'h-screen w-64 fixed left-0 top-0 border-r border-white/5 bg-[#101419] flex flex-col py-6 px-4 z-[55] transition-transform duration-300 lg:translate-x-0',
+          'h-screen w-56 sm:w-64 fixed left-0 top-0 border-r border-white/5 bg-[#101419] flex flex-col py-4 sm:py-6 px-3 sm:px-4 z-[55] transition-transform duration-300 lg:translate-x-0',
           isOpen ? 'translate-x-0' : '-translate-x-full',
         )}
       >
-        <div className="mb-10 px-2 mt-12 lg:mt-0">
-          <h1 className="text-lg font-headline font-bold text-white tracking-tighter">VerixaAI</h1>
-          <p className="text-[10px] uppercase tracking-[0.2em] text-slate-500 font-label">
+        <div className="mb-8 sm:mb-10 px-1 sm:px-2 mt-16 sm:mt-12 lg:mt-0">
+          <h1 className="text-base sm:text-lg font-headline font-bold text-white tracking-tighter">VerixaAI</h1>
+          <p className="text-[9px] sm:text-[10px] uppercase tracking-[0.2em] text-slate-500 font-label">
             AI Action Control
           </p>
         </div>
 
-        <div className="space-y-1 mb-6">
+        <div className="space-y-0.5 sm:space-y-1 mb-4 sm:mb-6">
           {navItems.map((item) => (
             <Link
               key={item.name}
               to={item.path}
               onClick={() => setIsOpen(false)}
               className={cn(
-                'flex items-center gap-3 py-3 px-4 rounded-lg font-body text-sm font-medium transition-all duration-200',
+                'flex items-center gap-2 sm:gap-3 py-2.5 sm:py-3 px-3 sm:px-4 rounded-lg font-body text-xs sm:text-sm font-medium transition-all duration-200',
                 location.pathname === item.path
                   ? 'bg-gradient-to-r from-primary/10 to-transparent text-primary border-r-2 border-primary'
                   : 'text-slate-500 hover:text-slate-200 hover:bg-white/5',
               )}
             >
-              <item.icon className="w-5 h-5" />
-              {item.name}
+              <item.icon className="w-4 h-4 sm:w-5 sm:h-5" />
+              <span className="hidden sm:inline">{item.name}</span>
             </Link>
           ))}
         </div>
 
         <button
           onClick={() => setIsCreateOpen(true)}
-          className="mx-2 bg-gradient-to-r from-primary to-primary-container text-on-primary font-semibold py-3 px-4 rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-primary/20 hover:scale-[1.02] transition-transform"
+          className="mx-1 sm:mx-2 bg-gradient-to-r from-primary to-primary-container text-on-primary font-semibold py-2.5 sm:py-3 px-3 sm:px-4 rounded-lg sm:rounded-xl flex items-center justify-center gap-1.5 sm:gap-2 shadow-lg shadow-primary/20 hover:scale-[1.02] transition-transform text-xs sm:text-sm"
         >
-          <Plus className="w-4 h-4" />
-          New Agent
+          <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+          <span className="hidden sm:inline">New Agent</span>
         </button>
 
-        <div className="mt-6 pt-4 border-t border-white/5">
-          <p className="text-[10px] uppercase tracking-widest text-slate-500 mb-2 px-2">Agents</p>
+        <div className="mt-4 sm:mt-6 pt-3 sm:pt-4 border-t border-white/5">
+          <p className="text-[8px] sm:text-[10px] uppercase tracking-widest text-slate-500 mb-2 px-1 sm:px-2">Agents</p>
           {agents.length === 0 ? (
             <p className="text-xs text-slate-500 px-2">No agents yet.</p>
           ) : (
-            <div className="space-y-2 px-2">
+            <div className="space-y-1.5 sm:space-y-2 px-1 sm:px-2">
               {agents.slice(0, 5).map((agent) => (
-                <div key={agent.id} className="rounded-md border border-white/5 bg-surface-container-low/30 p-2">
-                  <p className="text-xs text-white truncate">{agent.name}</p>
-                  <p className="text-[10px] text-slate-500 uppercase tracking-wider truncate">{agent.type}</p>
+                <div key={agent.id} className="rounded-md border border-white/5 bg-surface-container-low/30 p-1.5 sm:p-2">
+                  <p className="text-[11px] sm:text-xs text-white truncate">{agent.name}</p>
+                  <p className="text-[8px] sm:text-[10px] text-slate-500 uppercase tracking-wider truncate">{agent.type}</p>
                 </div>
               ))}
             </div>

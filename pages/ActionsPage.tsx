@@ -193,11 +193,11 @@ export default function ActionsPage() {
       <Sidebar />
 
       <main className="lg:ml-64 p-4 md:p-8 flex-grow pt-24 lg:pt-8">
-        <header className="mb-6">
-          <h2 className="text-3xl md:text-4xl font-headline font-extrabold tracking-tight text-white">
+        <header className="mb-6 sm:mb-8">
+          <h2 className="text-2xl sm:text-3xl md:text-4xl font-headline font-extrabold tracking-tight text-white mb-1 sm:mb-2">
             AI Actions
           </h2>
-          <p className="text-on-surface-variant mt-2 text-sm md:text-base">
+          <p className="text-on-surface-variant mt-1 sm:mt-2 text-xs sm:text-sm md:text-base">
             {'User -> Input -> AI Action -> Decision -> Execute'}
           </p>
         </header>
