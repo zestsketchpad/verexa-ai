@@ -144,99 +144,99 @@ export default function DashboardPage() {
   if (!isLoaded) return <div className="min-h-screen bg-background flex items-center justify-center text-on-surface-variant">Loading user...</div>;
 
   return (
-    <div className="min-h-screen bg-[#070809] flex text-[#e2e8f0]" style={{ fontFamily: '"Space Grotesk", sans-serif' }}>
+    <div className="min-h-screen bg-[#070809] flex flex-col text-[#e2e8f0] overflow-x-hidden" style={{ fontFamily: '"Space Grotesk", sans-serif' }}>
       <Sidebar />
-      <main className="lg:ml-64 flex-grow px-3 sm:px-4 md:px-6 pb-6 sm:pb-8 pt-20 sm:pt-24 lg:pt-8">
-        <div className="mx-auto max-w-[980px]">
-          <header className="mb-8 sm:mb-10 md:mb-12 flex flex-wrap items-center gap-2 sm:gap-3 md:gap-4 border-b border-[#1a2030] pb-4 sm:pb-6">
-            <div className="flex h-8 sm:h-10 w-8 sm:w-10 items-center justify-center rounded-lg sm:rounded-[10px] bg-gradient-to-br from-[#3b82f6] to-[#8b5cf6] text-sm sm:text-lg md:text-[18px] font-extrabold text-white">V</div>
-            <div className="text-base sm:text-lg md:text-[22px] font-bold tracking-[-0.5px]"><span className="text-[#3b82f6]">Verexa</span> AI</div>
-            <div className="hidden sm:inline-block rounded-full border border-[#3b82f633] bg-[#3b82f61a] px-2 sm:px-3 py-0.5 sm:py-1 text-[8px] sm:text-[10px] text-[#3b82f6]" style={mono}>GPT-4o-mini to Gemini 2.0 Flash</div>
-            <div className="ml-auto hidden md:block text-[9px] sm:text-[10px] lg:text-[11px] tracking-[1px] text-slate-500" style={mono}>MULTI-MODEL VERIFICATION ENGINE</div>
+      <main className="lg:ml-64 flex-grow w-full px-2 sm:px-3 md:px-4 lg:px-6 pb-4 sm:pb-6 md:pb-8 pt-20 sm:pt-24 lg:pt-8">
+        <div className="w-full mx-auto max-w-full lg:max-w-[980px]">
+          <header className="mb-5 sm:mb-8 md:mb-10 lg:mb-12 flex flex-wrap items-center gap-1.5 sm:gap-2 md:gap-3 lg:gap-4 border-b border-[#1a2030] pb-3 sm:pb-4 md:pb-5 lg:pb-6 overflow-x-auto">
+            <div className="flex h-7 sm:h-9 md:h-10 w-7 sm:w-9 md:w-10 flex-shrink-0 items-center justify-center rounded-lg sm:rounded-[10px] bg-gradient-to-br from-[#3b82f6] to-[#8b5cf6] text-xs sm:text-base md:text-lg font-extrabold text-white">V</div>
+            <div className="text-sm sm:text-base md:text-lg lg:text-[22px] font-bold tracking-[-0.5px] whitespace-nowrap"><span className="text-[#3b82f6]">Verexa</span> AI</div>
+            <div className="hidden sm:inline-flex flex-shrink-0 rounded-full border border-[#3b82f633] bg-[#3b82f61a] px-2 md:px-3 py-0.5 md:py-1 text-[7px] sm:text-[8px] md:text-[9px] lg:text-[10px] text-[#3b82f6]" style={mono}>GPT-4o-mini → Gemini</div>
+            <div className="ml-auto hidden lg:block text-[8px] md:text-[9px] lg:text-[10px] tracking-[1px] text-slate-500 whitespace-nowrap" style={mono}>VERIFICATION ENGINE</div>
           </header>
 
-          <div className="mb-6 sm:mb-8 flex overflow-x-auto py-3 sm:py-4">
+          <div className="mb-4 sm:mb-6 md:mb-8 flex overflow-x-auto py-2 sm:py-3 md:py-4 -mx-2 sm:-mx-3 md:-mx-4 lg:-mx-6 px-2 sm:px-3 md:px-4 lg:px-6">
             {STEPS.map(([label, model], index) => {
               const active = running && index === step;
               const done = running ? index < step : Boolean(result);
               return (
-                <div key={label} className="flex items-center">
-                  <div className="flex min-w-fit flex-col items-center gap-1">
-                    <div className={`rounded-lg sm:rounded-[10px] border px-2 sm:px-3 md:px-4 py-1.5 sm:py-2 md:py-2.5 text-[9px] sm:text-[10px] md:text-[11px] font-semibold tracking-[0.5px] ${active ? 'border-[#3b82f6] bg-[#3b82f614] shadow-[0_0_20px_rgba(59,130,246,0.15)]' : done ? 'border-green-500 bg-green-500/10' : 'border-[#1a2030] bg-[#0d1014]'}`}>{label}</div>
-                    <div className="text-[7px] sm:text-[8px] md:text-[9px] tracking-[1px] text-slate-500" style={mono}>{model}</div>
+                <div key={label} className="flex items-center flex-shrink-0">
+                  <div className="flex min-w-fit flex-col items-center gap-0.5 sm:gap-1">
+                    <div className={`rounded-lg sm:rounded-[10px] border px-1.5 sm:px-2 md:px-3 py-1 sm:py-1.5 md:py-2 text-[7px] sm:text-[9px] md:text-[10px] lg:text-[11px] font-semibold tracking-[0.5px] ${active ? 'border-[#3b82f6] bg-[#3b82f614] shadow-[0_0_20px_rgba(59,130,246,0.15)]' : done ? 'border-green-500 bg-green-500/10' : 'border-[#1a2030] bg-[#0d1014]'}`}>{label}</div>
+                    <div className="text-[6px] sm:text-[7px] md:text-[8px] lg:text-[9px] tracking-[0.5px] text-slate-500" style={mono}>{model}</div>
                   </div>
-                  {index < STEPS.length - 1 && <div className="mb-2 sm:mb-3 md:mb-4 h-[2px] w-4 sm:w-6 md:w-8 bg-gradient-to-r from-[#1a2030] to-[#2a3a55]" />}
+                  {index < STEPS.length - 1 && <div className="mb-1 sm:mb-2 md:mb-3 h-[1.5px] w-2 sm:w-3 md:w-4 lg:w-6 bg-gradient-to-r from-[#1a2030] to-[#2a3a55]" />}
                 </div>
               );
             })}
           </div>
 
-          <div className="mb-4 sm:mb-6">
-            <div className="mb-2 flex items-center gap-2 text-[10px] sm:text-[11px] md:text-[12px] tracking-[1px] text-slate-500" style={mono}>
-              <span>USER PROMPT</span><div className="h-px flex-1 bg-[#1a2030]" />
+          <div className="mb-3 sm:mb-4 md:mb-6">
+            <div className="mb-1.5 sm:mb-2 flex items-center gap-2 text-[8px] sm:text-[9px] md:text-[10px] lg:text-[11px] tracking-[0.5px] sm:tracking-[1px] text-slate-500" style={mono}>
+              <span>PROMPT</span><div className="h-px flex-1 bg-[#1a2030]" />
             </div>
-            <textarea className={`${box} min-h-[100px] sm:min-h-[120px] w-full rounded-lg sm:rounded-xl px-3 sm:px-4 md:px-5 py-3 sm:py-4 text-[13px] sm:text-[14px] md:text-[15px] leading-6 sm:leading-7 outline-none focus:border-[#3b82f6]`} value={prompt} onChange={(event) => setPrompt(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && event.ctrlKey) void runVerexa(); }} placeholder="e.g. Write a Kotlin function to fetch data from a REST API with error handling..." rows={5} />
+            <textarea className={`${box} min-h-[80px] sm:min-h-[100px] md:min-h-[120px] w-full rounded-lg sm:rounded-xl px-2 sm:px-3 md:px-4 lg:px-5 py-2 sm:py-3 md:py-4 text-[12px] sm:text-[13px] md:text-[14px] lg:text-[15px] leading-5 sm:leading-6 md:leading-7 outline-none focus:border-[#3b82f6] resize-none`} value={prompt} onChange={(event) => setPrompt(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && event.ctrlKey) void runVerexa(); }} placeholder="Write a function..." rows={4} />
           </div>
 
-          <button className="mb-6 sm:mb-8 w-full rounded-lg sm:rounded-xl bg-gradient-to-br from-[#3b82f6] to-[#8b5cf6] px-4 py-3 sm:py-4 text-[13px] sm:text-[14px] md:text-[15px] font-bold tracking-[0.5px] text-white transition hover:-translate-y-px disabled:cursor-not-allowed disabled:opacity-60 disabled:transform-none" onClick={() => void runVerexa()} disabled={running}>
-            {running ? 'Running Pipeline...' : 'Run Verexa Pipeline'}
+          <button className="mb-4 sm:mb-6 md:mb-8 w-full rounded-lg sm:rounded-xl bg-gradient-to-br from-[#3b82f6] to-[#8b5cf6] px-3 sm:px-4 py-2.5 sm:py-3 md:py-4 text-[12px] sm:text-[13px] md:text-[14px] lg:text-[15px] font-bold tracking-[0.5px] text-white transition hover:-translate-y-px disabled:cursor-not-allowed disabled:opacity-60 disabled:transform-none" onClick={() => void runVerexa()} disabled={running}>
+            {running ? 'Running...' : 'Run Pipeline'}
           </button>
 
-          {running && <div className="mb-4 sm:mb-6 flex items-center gap-2 sm:gap-3 rounded-lg sm:rounded-xl border border-[#3b82f633] bg-[#3b82f610] px-3 sm:px-4 py-2 sm:py-3 text-[10px] sm:text-[11px] md:text-[12px] text-[#3b82f6]" style={mono}><div className="h-3 w-3 sm:h-3.5 sm:w-3.5 animate-spin rounded-full border-2 border-[#3b82f633] border-t-[#3b82f6]" />{status}</div>}
-          {error && <div className="mb-4 sm:mb-6 rounded-lg sm:rounded-xl border border-red-500/20 bg-red-500/10 px-3 sm:px-4 md:px-5 py-3 sm:py-4 text-[10px] sm:text-[11px] md:text-[12px] text-red-300" style={mono}>{error}</div>}
+          {running && <div className="mb-3 sm:mb-4 md:mb-6 flex items-center gap-2 rounded-lg sm:rounded-xl border border-[#3b82f633] bg-[#3b82f610] px-2 sm:px-3 md:px-4 py-1.5 sm:py-2 md:py-3 text-[9px] sm:text-[10px] md:text-[11px] lg:text-[12px] text-[#3b82f6] truncate" style={mono}><div className="h-2.5 w-2.5 sm:h-3 sm:w-3 md:h-3.5 md:w-3.5 flex-shrink-0 animate-spin rounded-full border-2 border-[#3b82f633] border-t-[#3b82f6]" /><span className="truncate">{status}</span></div>}
+          {error && <div className="mb-3 sm:mb-4 md:mb-6 rounded-lg sm:rounded-xl border border-red-500/20 bg-red-500/10 px-2 sm:px-3 md:px-4 lg:px-5 py-2 sm:py-3 md:py-4 text-[9px] sm:text-[10px] md:text-[11px] lg:text-[12px] text-red-300 break-words" style={mono}>{error}</div>}
 
           {result && (
             <>
-              <div className="mb-3 flex items-center gap-2 text-[11px] tracking-[2px] text-slate-500" style={mono}><span>VERIFICATION RESULT</span><div className="h-px flex-1 bg-[#1a2030]" /></div>
-              <div className={`${box} mb-5 rounded-2xl p-5 sm:p-7`}>
-                <div className="flex flex-col gap-5 lg:grid lg:grid-cols-[auto_minmax(0,1fr)_auto] lg:items-start">
-                  <div className={`flex h-20 w-20 flex-col items-center justify-center rounded-full border-[3px] ${scoreTone(result.verification.score)}`}>
-                    <div className="text-[26px] font-extrabold leading-none">{result.verification.score}</div>
-                    <div className="mt-0.5 text-[9px] tracking-[1px]" style={mono}>SCORE</div>
+              <div className="mb-3 flex items-center gap-1.5 sm:gap-2 text-[9px] sm:text-[10px] md:text-[11px] tracking-[0.5px] sm:tracking-[1px] md:tracking-[2px] text-slate-500 truncate" style={mono}><span className="whitespace-nowrap">RESULT</span><div className="h-px flex-1 bg-[#1a2030]" /></div>
+              <div className={`${box} mb-3 sm:mb-5 rounded-lg sm:rounded-2xl p-3 sm:p-5`}>
+                <div className="flex flex-col gap-3 sm:gap-4 lg:gap-5 lg:grid lg:grid-cols-[auto_minmax(0,1fr)_auto] lg:items-start">
+                  <div className={`flex h-16 sm:h-20 w-16 sm:w-20 flex-shrink-0 flex-col items-center justify-center rounded-full border-[2.5px] sm:border-[3px] ${scoreTone(result.verification.score)}`}>
+                    <div className="text-xl sm:text-2xl md:text-[26px] font-extrabold leading-none">{result.verification.score}</div>
+                    <div className="mt-0.5 text-[8px] sm:text-[9px] tracking-[0.5px] sm:tracking-[1px]" style={mono}>SCORE</div>
                   </div>
-                  <div className="min-w-0 space-y-2">
-                    <div className="text-[13px] text-slate-500" style={mono}>Grade: <b className="text-[#e2e8f0]">{result.verification.grade}</b> | Badge: <b className="text-[#e2e8f0]">{result.verification.badge}</b></div>
-                    <div className="text-[13px] leading-6 text-slate-400 break-words">{result.verification.verdict}</div>
+                  <div className="min-w-0 space-y-1 sm:space-y-2">
+                    <div className="text-[11px] sm:text-[12px] md:text-[13px] text-slate-500 break-words" style={mono}>Grade: <b className="text-[#e2e8f0]">{result.verification.grade}</b> | Badge: <b className="text-[#e2e8f0]">{result.verification.badge}</b></div>
+                    <div className="text-[11px] sm:text-[12px] md:text-[13px] leading-5 sm:leading-6 text-slate-400 break-words">{result.verification.verdict}</div>
                   </div>
-                  <div className="flex flex-col items-start gap-2 lg:items-end lg:justify-self-end">
-                    <div className="rounded-full border border-violet-500/20 bg-violet-500/10 px-3 py-1 text-[11px] uppercase tracking-[1px] text-violet-400" style={mono}>{result.taskType.toUpperCase()}</div>
-                    <div className="text-[11px] text-slate-500" style={mono}>Confidence: {result.verification.confidence}%</div>
+                  <div className="flex flex-col items-start gap-1.5 sm:gap-2 lg:items-end">
+                    <div className="rounded-full border border-violet-500/20 bg-violet-500/10 px-2 sm:px-3 py-0.5 sm:py-1 text-[9px] sm:text-[10px] md:text-[11px] uppercase tracking-[0.5px] sm:tracking-[1px] text-violet-400" style={mono}>{result.taskType.toUpperCase().substring(0, 8)}</div>
+                    <div className="text-[9px] sm:text-[10px] md:text-[11px] text-slate-500" style={mono}>Conf: {result.verification.confidence}%</div>
                   </div>
                 </div>
-                <div className="mt-4 grid gap-3 lg:grid-cols-2">
-                  <div className="rounded-xl border border-red-400/15 bg-red-500/5 p-3">
-                    <div className="mb-2 text-[10px] tracking-[1px] text-red-300" style={mono}>ISSUES</div>
-                    <div className="flex flex-wrap gap-2">{result.verification.issues.map((item) => <span key={item} className="max-w-full rounded-md border border-red-400/15 bg-red-500/10 px-2.5 py-1 text-[11px] text-red-300 whitespace-normal break-words" style={mono}>ISSUE {item}</span>)}</div>
+                <div className="mt-3 sm:mt-4 grid gap-2 sm:gap-3 lg:grid-cols-2">
+                  <div className="rounded-lg sm:rounded-xl border border-red-400/15 bg-red-500/5 p-2 sm:p-3">
+                    <div className="mb-1.5 sm:mb-2 text-[8px] sm:text-[9px] md:text-[10px] tracking-[0.5px] sm:tracking-[1px] text-red-300" style={mono}>ISSUES</div>
+                    <div className="flex flex-wrap gap-1.5 sm:gap-2">{result.verification.issues.map((item) => <span key={item} className="max-w-full rounded-md border border-red-400/15 bg-red-500/10 px-1.5 sm:px-2 py-0.5 sm:py-1 text-[8px] sm:text-[9px] md:text-[10px] lg:text-[11px] text-red-300 whitespace-normal break-words" style={mono}>I: {item.substring(0, 3)}</span>)}</div>
                   </div>
-                  <div className="rounded-xl border border-green-400/15 bg-green-500/5 p-3">
-                    <div className="mb-2 text-[10px] tracking-[1px] text-green-300" style={mono}>IMPROVEMENTS</div>
-                    <div className="flex flex-wrap gap-2">{result.verification.fixes.map((item) => <span key={item} className="max-w-full rounded-md border border-green-400/15 bg-green-500/10 px-2.5 py-1 text-[11px] text-green-300 whitespace-normal break-words" style={mono}>FIX {item}</span>)}</div>
+                  <div className="rounded-lg sm:rounded-xl border border-green-400/15 bg-green-500/5 p-2 sm:p-3">
+                    <div className="mb-1.5 sm:mb-2 text-[8px] sm:text-[9px] md:text-[10px] tracking-[0.5px] sm:tracking-[1px] text-green-300" style={mono}>FIXES</div>
+                    <div className="flex flex-wrap gap-1.5 sm:gap-2">{result.verification.fixes.map((item) => <span key={item} className="max-w-full rounded-md border border-green-400/15 bg-green-500/10 px-1.5 sm:px-2 py-0.5 sm:py-1 text-[8px] sm:text-[9px] md:text-[10px] lg:text-[11px] text-green-300 whitespace-normal break-words" style={mono}>F: {item.substring(0, 3)}</span>)}</div>
                   </div>
                 </div>
               </div>
 
-              <div className="mb-3 flex items-center gap-2 text-[11px] tracking-[2px] text-slate-500" style={mono}><span>RESPONSE COMPARISON</span><div className="h-px flex-1 bg-[#1a2030]" /></div>
-              <div className="mb-5 grid gap-4 md:grid-cols-2">
+              <div className="mb-3 flex items-center gap-1.5 sm:gap-2 text-[9px] sm:text-[10px] md:text-[11px] tracking-[0.5px] sm:tracking-[1px] md:tracking-[2px] text-slate-500 truncate" style={mono}><span className="whitespace-nowrap">RESPONSES</span><div className="h-px flex-1 bg-[#1a2030]" /></div>
+              <div className="mb-3 sm:mb-5 grid gap-2 sm:gap-3 md:gap-4 md:grid-cols-2">
                 {[
-                  ['ORIGINAL', 'gpt-4o-mini', '#f59e0b', result.originalResponse, false],
-                  ['VERIFIED AND IMPROVED', 'gemini-2.0-flash', '#3b82f6', result.verifiedResponse, true],
+                  ['ORIG', 'gpt-4o-mini', '#f59e0b', result.originalResponse, false],
+                  ['VERIFIED', 'gemini-2.0', '#3b82f6', result.verifiedResponse, true],
                 ].map(([title, model, color, body, verified]) => (
-                  <div key={title as string} className={`${box} ${verified ? 'border-[#3b82f64d]' : ''} overflow-hidden rounded-2xl`}>
-                    <div className="flex items-center gap-2 border-b border-[#1a2030] bg-white/[0.02] px-4 py-3">
-                      <div className="h-2 w-2 rounded-full" style={{ background: color as string }} />
-                      <div className="text-[12px] font-bold tracking-[0.5px]">{title}</div>
-                      <div className="ml-auto text-[10px] text-slate-500" style={mono}>{model}</div>
+                  <div key={title as string} className={`${box} ${verified ? 'border-[#3b82f64d]' : ''} overflow-hidden rounded-lg sm:rounded-2xl flex flex-col`}>
+                    <div className="flex items-center gap-1.5 sm:gap-2 border-b border-[#1a2030] bg-white/[0.02] px-2 sm:px-3 md:px-4 py-2 sm:py-3 min-h-[44px]">
+                      <div className="h-1.5 sm:h-2 w-1.5 sm:w-2 flex-shrink-0 rounded-full" style={{ background: color as string }} />
+                      <div className="text-[10px] sm:text-[11px] md:text-[12px] font-bold tracking-[0.5px] truncate">{title}</div>
+                      <div className="ml-auto text-[8px] sm:text-[9px] md:text-[10px] text-slate-500 truncate" style={mono}>{model}</div>
                     </div>
-                    <div className="max-h-80 overflow-y-auto whitespace-pre-wrap px-4 py-4 text-[13px] leading-7 text-slate-300" style={mono}>{body}</div>
+                    <div className="max-h-48 sm:max-h-64 md:max-h-80 overflow-y-auto flex-1 whitespace-pre-wrap px-2 sm:px-3 md:px-4 py-2 sm:py-3 md:py-4 text-[10px] sm:text-[11px] md:text-[12px] lg:text-[13px] leading-5 sm:leading-6 md:leading-7 text-slate-300" style={mono}>{body}</div>
                   </div>
                 ))}
               </div>
             </>
           )}
 
-          <footer className="mt-12 flex flex-wrap items-center justify-between gap-4 border-t border-[#1a2030] pt-8">
-            <div className="text-[11px] text-slate-600" style={mono}>{`© ${new Date().getFullYear()} Verexa AI | Multi-Model Verification Engine`}</div>
-            <div className="rounded-md border border-[#1a2030] bg-white/[0.03] px-3 py-1 text-[10px] text-slate-500" style={mono}>GPT-4o-mini to Gemini 2.0 Flash to Verified Output</div>
+          <footer className="mt-8 sm:mt-10 md:mt-12 flex flex-col gap-2 sm:gap-3 sm:flex-row sm:items-center sm:justify-between border-t border-[#1a2030] pt-4 sm:pt-6 md:pt-8">
+            <div className="text-[9px] sm:text-[10px] md:text-[11px] text-slate-600" style={mono}>{`© ${new Date().getFullYear()} Verexa AI`}</div>
+            <div className="rounded-md border border-[#1a2030] bg-white/[0.03] px-2 sm:px-3 py-1 text-[8px] sm:text-[9px] md:text-[10px] text-slate-500 whitespace-nowrap" style={mono}>GPT-4o-mini → Gemini → Verified</div>
           </footer>
         </div>
       </main>
