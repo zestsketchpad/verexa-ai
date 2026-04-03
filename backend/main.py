@@ -8,7 +8,10 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from pipeline.verify import verify_pipeline
+try:
+    from backend.pipeline.verify import verify_pipeline
+except ImportError:
+    from pipeline.verify import verify_pipeline
 
 app = FastAPI(
     title="Verexa AI",

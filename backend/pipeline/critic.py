@@ -1,7 +1,10 @@
 import json
 from typing import Any
 
-from pipeline.utils import call_model, parse_json_response
+try:
+    from backend.pipeline.utils import call_model, parse_json_response
+except ImportError:
+    from pipeline.utils import call_model, parse_json_response
 
 
 def _normalize_score(score: Any) -> float:

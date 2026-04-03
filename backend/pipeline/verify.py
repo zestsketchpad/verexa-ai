@@ -1,5 +1,9 @@
-from pipeline.critic import critique_response
-from pipeline.generate import generate_response
+try:
+    from backend.pipeline.critic import critique_response
+    from backend.pipeline.generate import generate_response
+except ImportError:
+    from pipeline.critic import critique_response
+    from pipeline.generate import generate_response
 
 
 def verify_pipeline(input_text: str, mode: str = "auto") -> dict:
