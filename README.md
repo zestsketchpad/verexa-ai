@@ -27,6 +27,27 @@ npm install
 npm run dev
 ```
 
+## Deploy To Render
+
+This repo is a Vite static site, not a Python app.
+
+If Render shows a build step like:
+
+```bash
+pip install -r requirements.txt
+```
+
+then the service was created with the wrong runtime.
+
+Use the included [`render.yaml`](./render.yaml) as a Blueprint, or create a **Static Site** manually with:
+
+- Build Command: `npm install && npm run build`
+- Publish Directory: `dist`
+- Rewrite Rule: `/*` -> `/index.html`
+- Environment Variable: `VITE_CLERK_PUBLISHABLE_KEY`
+
+If you already created a Python service on Render, delete it and create a new Static Site or Blueprint deployment instead.
+
 ## Clerk Authentication Setup
 
 This project now uses [Clerk](https://clerk.com/) for authentication with:
