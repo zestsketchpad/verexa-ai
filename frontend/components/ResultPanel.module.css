@@ -1,0 +1,139 @@
+.grid {
+  display: grid;
+  gap: 20px;
+  grid-template-columns: 0.84fr 1.16fr;
+}
+
+.before,
+.after {
+  border-radius: 30px;
+  padding: 24px;
+}
+
+.before {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(20px);
+}
+
+.after {
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 1), rgba(245, 246, 248, 0.97));
+  box-shadow: 0 30px 120px rgba(255, 255, 255, 0.08);
+  color: #0f172a;
+}
+
+.headerRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.label {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+}
+
+.before .label {
+  color: #7c8799;
+}
+
+.after .label {
+  color: #6b7280;
+}
+
+.badge {
+  border-radius: 999px;
+  background: #111827;
+  color: white;
+  padding: 7px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.variantRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.variantButton {
+  border: 1px solid rgba(15, 23, 42, 0.1);
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.04);
+  color: #475569;
+  padding: 8px 13px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition:
+    background 0.18s ease,
+    color 0.18s ease,
+    border-color 0.18s ease;
+}
+
+.variantButton:hover {
+  background: rgba(15, 23, 42, 0.08);
+  color: #0f172a;
+}
+
+.variantButtonActive {
+  background: #0f172a;
+  color: white;
+  border-color: #0f172a;
+}
+
+.beforeText {
+  margin: 0;
+  color: #99a1af;
+  font-size: 14px;
+  line-height: 1.9;
+  white-space: pre-wrap;
+}
+
+.normalizedBox {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.normalizedLabel {
+  margin: 0 0 8px;
+  color: #7c8799;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+}
+
+.normalizedText {
+  margin: 0;
+  color: #dbe1ea;
+  font-size: 13px;
+  line-height: 1.8;
+}
+
+.afterText {
+  margin: 0;
+  max-width: 62ch;
+  color: #0f172a;
+  font-size: 18px;
+  line-height: 1.95;
+  white-space: pre-wrap;
+}
+
+@media (max-width: 860px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}

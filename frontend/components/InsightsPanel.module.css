@@ -1,0 +1,55 @@
+.panel {
+  display: grid;
+  gap: 24px;
+  border-radius: 28px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(18px);
+  padding: 22px;
+  grid-template-columns: 1fr 1fr;
+}
+
+.block {
+  display: grid;
+  gap: 12px;
+}
+
+.title {
+  margin: 0;
+  color: #7c8799;
+  font-size: 12px;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+}
+
+.list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 10px;
+}
+
+.item {
+  display: flex;
+  gap: 10px;
+  color: #e5e7eb;
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+.bullet {
+  color: #6b7280;
+}
+
+.empty {
+  margin: 0;
+  color: #6b7280;
+  font-size: 14px;
+}
+
+@media (max-width: 760px) {
+  .panel {
+    grid-template-columns: 1fr;
+  }
+}

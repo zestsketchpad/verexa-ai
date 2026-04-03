@@ -1,13 +1,17 @@
 # env files
 .env
 .env.local
+backend/.env
 
 # node
 node_modules/
+frontend/.next/
+frontend/dev-server.log
 
 # python
 __pycache__/
 *.pyc
+backend/venv/
 
 # system
 .DS_Store
