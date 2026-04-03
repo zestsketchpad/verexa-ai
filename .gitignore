@@ -1,0 +1,13 @@
+# env files
+.env
+.env.local
+
+# node
+node_modules/
+
+# python
+__pycache__/
+*.pyc
+
+# system
+.DS_Store
