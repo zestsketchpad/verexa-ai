@@ -6,6 +6,8 @@ backend/.env
 # node
 node_modules/
 frontend/.next/
+frontend/.open-next/
+frontend/.wrangler/
 frontend/dev-server.log
 
 # python
