@@ -1,61 +1,74 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { motion } from "framer-motion";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import type { Session } from "@supabase/supabase-js";
 import AuthPanel from "@/components/AuthPanel";
-import HistoryPanel, { type HistoryItem } from "@/components/HistoryPanel";
-import InsightsPanel from "@/components/InsightsPanel";
-import InputBox from "@/components/InputBox";
+import type { HistoryItem } from "@/components/HistoryPanel";
 import ProfileDock from "@/components/ProfileDock";
-import ResultPanel from "@/components/ResultPanel";
-import ScoreCard from "@/components/ScoreCard";
 import { generateResponse } from "@/lib/api";
 import {
   clearStoredSessionId,
   createMemorySession,
-  ensureMemorySession,
   fetchMemoryHistory,
+  getStoredChatSessions,
   getStoredSessionId,
+  setStoredSessionId,
+  type ChatSessionSummary,
+  upsertStoredChatSession,
 } from "@/lib/memory";
 import { createSupabaseBrowserClient, hasSupabaseBrowserConfig } from "@/lib/supabase/client";
 import styles from "./page.module.css";
 
-const revealProps = {
-  initial: { opacity: 0, y: 18 },
-  animate: { opacity: 1, y: 0 },
-  transition: { duration: 0.35 },
-};
+const MODE_OPTIONS = [
+  { key: "auto", label: "Auto" },
+  { key: "coding", label: "Coding" },
+  { key: "email", label: "Email" },
+  { key: "explain", label: "Explain" },
+  { key: "brainstorm", label: "Ideas" },
+];
 
 function toChronologicalTurns(items: HistoryItem[]): HistoryItem[] {
   return [...items].sort((a, b) => a.timestamp - b.timestamp);
 }
 
+function deriveChatTitle(input: string): string {
+  const compact = input.trim().replace(/\s+/g, " ");
+  if (!compact) {
+    return "New chat";
+  }
+
+  return compact.length > 48 ? `${compact.slice(0, 48)}...` : compact;
+}
+
+function formatTime(timestamp: number): string {
+  try {
+    return new Date(timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  } catch {
+    return "Now";
+  }
+}
+
+function turnIdentity(turn: HistoryItem): string {
+  return String(turn.id || turn.timestamp);
+}
+
 export default function Home() {
   const supabaseConfigured = hasSupabaseBrowserConfig();
   const supabase = useMemo(() => createSupabaseBrowserClient(), []);
+  const threadRef = useRef<HTMLDivElement | null>(null);
+
   const [authReady, setAuthReady] = useState(false);
   const [session, setSession] = useState<Session | null>(null);
-  const [input, setInput] = useState("");
+  const [draft, setDraft] = useState("");
   const [mode, setMode] = useState("auto");
-  const [rawInput, setRawInput] = useState("");
-  const [normalizedInput, setNormalizedInput] = useState("");
-  const [output, setOutput] = useState("");
-  const [score, setScore] = useState(0);
-  const [confidence, setConfidence] = useState(0);
-  const [tone, setTone] = useState("");
-  const [issues, setIssues] = useState<string[]>([]);
-  const [improvements, setImprovements] = useState<string[]>([]);
-  const [reasoning, setReasoning] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [showDetails, setShowDetails] = useState(false);
-  const [copied, setCopied] = useState(false);
-  const [iterationCount, setIterationCount] = useState(1);
-  const [history, setHistory] = useState<HistoryItem[]>([]);
   const [turns, setTurns] = useState<HistoryItem[]>([]);
   const [sessionId, setSessionId] = useState("");
+  const [pendingPrompt, setPendingPrompt] = useState("");
+  const [chatSessions, setChatSessions] = useState<ChatSessionSummary[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedTurnId, setSelectedTurnId] = useState("");
 
   useEffect(() => {
     if (!supabase) {
@@ -87,362 +100,231 @@ export default function Home() {
 
   useEffect(() => {
     if (!authReady || !session) {
-      setHistory([]);
       setTurns([]);
       setSessionId("");
+      setChatSessions([]);
+      setSelectedTurnId("");
+      return;
+    }
+
+    const userId = session.user.id;
+    const storedChats = getStoredChatSessions(userId);
+    setChatSessions(storedChats);
+
+    const activeSessionId =
+      getStoredSessionId(userId) || (storedChats.length > 0 ? storedChats[0].sessionId : "");
+
+    setSessionId(activeSessionId);
+  }, [authReady, session]);
+
+  useEffect(() => {
+    if (!session || !sessionId) {
+      setTurns([]);
       return;
     }
 
     let cancelled = false;
-    const activeUserId = session.user.id;
 
-    async function hydrateSession(targetSessionId: string) {
-      const items = await fetchMemoryHistory(targetSessionId);
-      if (cancelled) {
-        return;
-      }
+    async function hydrate() {
+      setError("");
 
-      setHistory(items);
-      setTurns(toChronologicalTurns(items));
-    }
-
-    async function initializeMemory() {
       try {
-        const nextSessionId = await ensureMemorySession(activeUserId);
+        const nextHistory = await fetchMemoryHistory(sessionId);
         if (cancelled) {
           return;
         }
 
-        setSessionId(nextSessionId);
+        const nextTurns = toChronologicalTurns(nextHistory);
+        setTurns(nextTurns);
 
-        if (nextSessionId) {
-          await hydrateSession(nextSessionId);
+        if (nextTurns.length > 0) {
+          setSelectedTurnId(turnIdentity(nextTurns[nextTurns.length - 1]));
         }
       } catch (err) {
         console.error(err);
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : "Failed to load chat history.");
+        }
       }
     }
 
-    const existingSessionId = getStoredSessionId();
-    if (existingSessionId) {
-      setSessionId(existingSessionId);
-      void hydrateSession(existingSessionId).catch((err) => console.error(err));
-    } else {
-      void initializeMemory();
-    }
+    void hydrate();
 
     return () => {
       cancelled = true;
     };
-  }, [authReady, session]);
+  }, [session, sessionId]);
 
-  const refreshHistory = async (nextSessionId: string) => {
-    if (!nextSessionId) {
+  useEffect(() => {
+    const node = threadRef.current;
+    if (!node) {
       return;
     }
 
-    try {
-      const nextHistory = await fetchMemoryHistory(nextSessionId);
-      setHistory(nextHistory);
-      setTurns(toChronologicalTurns(nextHistory));
-    } catch (err) {
-      console.error(err);
-    }
-  };
+    node.scrollTo({ top: node.scrollHeight, behavior: "smooth" });
+  }, [turns, pendingPrompt]);
 
-  const resolveSessionId = async (): Promise<string> => {
-    if (sessionId) {
-      return sessionId;
+  const handleNewChat = () => {
+    if (session) {
+      clearStoredSessionId(session.user.id);
     }
 
-    try {
-      const nextSessionId = await ensureMemorySession(session?.user.id);
-      if (nextSessionId && nextSessionId !== sessionId) {
-        setSessionId(nextSessionId);
-      }
-      return nextSessionId;
-    } catch (err) {
-      console.error("Memory session setup failed, continuing without session.", err);
-      return "";
-    }
-  };
-
-  const appendLocalTurn = (
-    userInput: string,
-    assistantOutput: string,
-    nextScore: number,
-    nextConfidence: number,
-    nextTone: string,
-    nextReasoning: string,
-    replaceLastMatchingInput = false,
-  ) => {
-    const nextTurn: HistoryItem = {
-      id: `${Date.now()}`,
-      input: userInput,
-      normalizedInput: userInput,
-      output: assistantOutput,
-      score: nextScore,
-      confidence: nextConfidence,
-      tone: nextTone,
-      reasoning: nextReasoning,
-      timestamp: Date.now(),
-    };
-
-    setTurns((current) => {
-      if (replaceLastMatchingInput && current.length > 0) {
-        const last = current[current.length - 1];
-        if (last.input.trim().toLowerCase() === userInput.trim().toLowerCase()) {
-          return [...current.slice(0, -1), nextTurn];
-        }
-      }
-
-      return [...current, nextTurn];
-    });
-  };
-
-  const handleNewChat = async () => {
-    clearStoredSessionId();
     setSessionId("");
-    setHistory([]);
     setTurns([]);
-    setInput("");
-    setRawInput("");
-    setNormalizedInput("");
-    setOutput("");
-    setReasoning("");
-    setIssues([]);
-    setImprovements([]);
-    setScore(0);
-    setConfidence(0);
-    setTone("");
+    setPendingPrompt("");
+    setSelectedTurnId("");
     setError("");
-    setShowDetails(false);
-    setCopied(false);
-    setIterationCount(1);
-
-    if (!session) {
-      return;
-    }
-
-    try {
-      const nextSessionId = await createMemorySession(
-        session.user.id,
-        `Chat ${new Date().toLocaleDateString()}`,
-      );
-      setSessionId(nextSessionId);
-    } catch (err) {
-      console.error(err);
-    }
   };
 
-  const handleGenerate = async (text: string) => {
-    const trimmed = text.trim();
-
-    if (trimmed.length < 3) {
-      setError("Please enter at least 3 characters.");
-      setOutput("");
-      setShowDetails(false);
+  const handleSelectChat = (nextSessionId: string) => {
+    if (!session || !nextSessionId) {
       return;
     }
 
-    setInput(trimmed);
+    setStoredSessionId(nextSessionId, session.user.id);
+    setSessionId(nextSessionId);
+    setPendingPrompt("");
+    setError("");
+  };
+
+  const handleGenerate = async () => {
+    const trimmed = draft.trim();
+
+    if (!trimmed || loading || !session) {
+      return;
+    }
+
+    setDraft("");
     setLoading(true);
     setError("");
-    setCopied(false);
-    setShowDetails(false);
+    setPendingPrompt(trimmed);
+
+    let resolvedSessionId = sessionId;
 
     try {
-      const nextSessionId = await resolveSessionId();
-      const data = await generateResponse(trimmed, mode, nextSessionId);
-
-      const nextOutput = data.verified_response || "";
-      const nextScore = typeof data.score === "number" ? data.score : 0;
-      const nextConfidence = typeof data.confidence === "number" ? data.confidence : 0;
-      const nextTone = data.tone || "neutral";
-      const nextReasoning = data.reasoning || "";
-
-      setRawInput(data.raw_input || trimmed);
-      setNormalizedInput(data.normalized_input || trimmed);
-      setOutput(nextOutput);
-      setScore(nextScore);
-      setConfidence(nextConfidence);
-      setTone(nextTone);
-      setIssues(Array.isArray(data.issues_found) ? data.issues_found : []);
-      setImprovements(Array.isArray(data.improvements_made) ? data.improvements_made : []);
-      setReasoning(nextReasoning);
-      setIterationCount((current) => current + 1);
-
-      appendLocalTurn(trimmed, nextOutput, nextScore, nextConfidence, nextTone, nextReasoning);
-      await refreshHistory(nextSessionId);
-    } catch (err) {
-      console.error(err);
-      setRawInput("");
-      setNormalizedInput("");
-      setOutput("");
-      setReasoning("");
-      setError(err instanceof Error ? err.message : "Something went wrong.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleRefine = async () => {
-    const refinedInput = output.trim();
-
-    if (!refinedInput || loading) {
-      return;
-    }
-
-    setLoading(true);
-    setError("");
-    setCopied(false);
-    setShowDetails(false);
-
-    try {
-      const nextSessionId = await resolveSessionId();
-      const data = await generateResponse(refinedInput, mode, nextSessionId);
-
-      const nextOutput = data.verified_response || refinedInput;
-      const nextScore = typeof data.score === "number" ? data.score : 0;
-      const nextConfidence = typeof data.confidence === "number" ? data.confidence : 0;
-      const nextTone = data.tone || "neutral";
-      const nextReasoning = data.reasoning || "";
-
-      setInput(refinedInput);
-      setRawInput(data.raw_input || refinedInput);
-      setNormalizedInput(data.normalized_input || refinedInput);
-      setOutput(nextOutput);
-      setScore(nextScore);
-      setConfidence(nextConfidence);
-      setTone(nextTone);
-      setIssues(Array.isArray(data.issues_found) ? data.issues_found : []);
-      setImprovements(Array.isArray(data.improvements_made) ? data.improvements_made : []);
-      setReasoning(nextReasoning);
-      setIterationCount((current) => current + 1);
-
-      appendLocalTurn(refinedInput, nextOutput, nextScore, nextConfidence, nextTone, nextReasoning);
-      await refreshHistory(nextSessionId);
-    } catch (err) {
-      console.error(err);
-      setError(err instanceof Error ? err.message : "Something went wrong.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleModeChange = async (nextMode: string) => {
-    setMode(nextMode);
-
-    if (input.trim() && output && !loading) {
-      setLoading(true);
-      setError("");
-      setCopied(false);
-      setShowDetails(false);
-
-      try {
-        const nextSessionId = await resolveSessionId();
-        const data = await generateResponse(input.trim(), nextMode, nextSessionId);
-
-        const nextOutput = data.verified_response || "";
-        const nextScore = typeof data.score === "number" ? data.score : 0;
-        const nextConfidence = typeof data.confidence === "number" ? data.confidence : 0;
-        const nextTone = data.tone || "neutral";
-        const nextReasoning = data.reasoning || "";
-
-        setRawInput(data.raw_input || input.trim());
-        setNormalizedInput(data.normalized_input || input.trim());
-        setOutput(nextOutput);
-        setScore(nextScore);
-        setConfidence(nextConfidence);
-        setTone(nextTone);
-        setIssues(Array.isArray(data.issues_found) ? data.issues_found : []);
-        setImprovements(Array.isArray(data.improvements_made) ? data.improvements_made : []);
-        setReasoning(nextReasoning);
-
-        appendLocalTurn(input.trim(), nextOutput, nextScore, nextConfidence, nextTone, nextReasoning, true);
-        await refreshHistory(nextSessionId);
-      } catch (err) {
-        console.error(err);
-        setError(err instanceof Error ? err.message : "Something went wrong.");
-      } finally {
-        setLoading(false);
+      if (!resolvedSessionId) {
+        resolvedSessionId = await createMemorySession(session.user.id, deriveChatTitle(trimmed));
+        setSessionId(resolvedSessionId);
+        setStoredSessionId(resolvedSessionId, session.user.id);
       }
+
+      const data = await generateResponse(trimmed, mode, resolvedSessionId);
+      const nextOutput =
+        String(data.verified_response || "").trim() ||
+        "I could not generate a response. Please try again.";
+
+      const fallbackTurn: HistoryItem = {
+        id: `${Date.now()}`,
+        input: trimmed,
+        normalizedInput: data.normalized_input || trimmed,
+        output: nextOutput,
+        score: typeof data.score === "number" ? data.score : 0,
+        confidence: typeof data.confidence === "number" ? data.confidence : 0,
+        tone: data.tone || "neutral",
+        reasoning: data.reasoning || "",
+        timestamp: Date.now(),
+      };
+
+      const refreshed = await fetchMemoryHistory(resolvedSessionId);
+      const nextTurns = toChronologicalTurns(refreshed);
+      const resolvedTurns = nextTurns.length > 0 ? nextTurns : [...turns, fallbackTurn];
+
+      setTurns(resolvedTurns);
+      setSelectedTurnId(turnIdentity(resolvedTurns[resolvedTurns.length - 1]));
+
+      const updatedSessions = upsertStoredChatSession(
+        {
+          sessionId: resolvedSessionId,
+          title: deriveChatTitle(trimmed),
+          preview: nextOutput.slice(0, 140),
+          updatedAt: Date.now(),
+        },
+        session.user.id,
+      );
+      setChatSessions(updatedSessions);
+    } catch (err) {
+      console.error(err);
+      setDraft(trimmed);
+      setError(err instanceof Error ? err.message : "Something went wrong while generating a response.");
+    } finally {
+      setLoading(false);
+      setPendingPrompt("");
     }
   };
 
-  const handleCopy = async () => {
-    if (!output) {
-      return;
+  const handleComposerKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      void handleGenerate();
     }
-
-    await navigator.clipboard.writeText(output);
-    setCopied(true);
   };
 
-  const handleSelectHistory = (item: HistoryItem) => {
-    setInput(item.input);
-    setRawInput(item.input);
-    setNormalizedInput(item.normalizedInput || item.input);
-    setOutput(item.output);
-    setScore(item.score);
-    setConfidence(item.confidence || 0);
-    setTone(item.tone || "neutral");
-    setIssues([]);
-    setImprovements([]);
-    setReasoning(item.reasoning || "");
-    setShowDetails(false);
-    setCopied(false);
-    setError("");
-  };
-
-  const filteredHistory = history.filter((item) => {
+  const filteredChats = chatSessions.filter((item) => {
     const query = searchQuery.trim().toLowerCase();
     if (!query) {
       return true;
     }
 
-    return [item.input, item.output, item.normalizedInput, item.reasoning]
+    return [item.title, item.preview]
       .filter((value): value is string => Boolean(value))
       .some((value) => value.toLowerCase().includes(query));
   });
 
-  const sidebarHistory = filteredHistory.slice(0, 14);
+  const activeTurn =
+    turns.find((turn) => turnIdentity(turn) === selectedTurnId) ||
+    (turns.length > 0 ? turns[turns.length - 1] : null);
+
+  const canSend = draft.trim().length >= 3 && !loading;
 
   return (
     <main className={styles.page}>
-      <div className={styles.shell}>
+      <div className={styles.layout}>
         <aside className={styles.sidebar}>
           <div className={styles.sidebarTop}>
             <div className={styles.brandRow}>
-              <div className={styles.brandMark}>V</div>
+              <span className={styles.brandMark}>V</span>
               <div>
-                <p className={styles.brand}>Verixa AI</p>
-                <p className={styles.brandSub}>Prompt studio</p>
+                <p className={styles.brandTitle}>Verixa AI</p>
+                <p className={styles.brandSub}>Assistant</p>
               </div>
             </div>
 
-            <label className={styles.searchBox} htmlFor="history-search">
-              <span className={styles.searchIcon}>⌕</span>
+            <button type="button" className={styles.newChatButton} onClick={handleNewChat}>
+              + New chat
+            </button>
+
+            <label htmlFor="chat-search" className={styles.searchBox}>
               <input
-                id="history-search"
+                id="chat-search"
                 value={searchQuery}
                 onChange={(event) => setSearchQuery(event.target.value)}
+                placeholder="Search your chats"
                 className={styles.searchInput}
-                placeholder="Search chats"
               />
             </label>
 
-            <div className={styles.sectionHeader}>
-              <p className={styles.sectionTitle}>Recent</p>
-              <div className={styles.sectionActions}>
-                <p className={styles.sectionMeta}>{sidebarHistory.length} items</p>
-                <button type="button" className={styles.newChatButton} onClick={handleNewChat}>
-                  New chat
-                </button>
-              </div>
+            <div className={styles.chatList}>
+              {filteredChats.length === 0 ? (
+                <p className={styles.emptyChats}>No saved chats yet.</p>
+              ) : (
+                filteredChats.map((chat) => (
+                  <button
+                    key={chat.sessionId}
+                    type="button"
+                    onClick={() => handleSelectChat(chat.sessionId)}
+                    className={
+                      chat.sessionId === sessionId
+                        ? `${styles.chatItem} ${styles.chatItemActive}`
+                        : styles.chatItem
+                    }
+                  >
+                    <p className={styles.chatTitle}>{chat.title}</p>
+                    <p className={styles.chatPreview}>{chat.preview || "No preview yet"}</p>
+                    <p className={styles.chatTime}>{formatTime(chat.updatedAt)}</p>
+                  </button>
+                ))
+              )}
             </div>
-
-            <HistoryPanel history={sidebarHistory} onSelect={handleSelectHistory} showLabel={false} />
           </div>
 
           <ProfileDock
@@ -452,135 +334,134 @@ export default function Home() {
           />
         </aside>
 
-        <section className={styles.workspace}>
-          <div className={styles.workspaceTopBar}>
-            <button type="button" className={styles.pillButton}>
-              AI Assistant
-            </button>
-            <button type="button" className={styles.menuButton}>
-              •••
-            </button>
-          </div>
+        <section className={styles.mainPanel}>
+          <header className={styles.mainHeader}>
+            <div>
+              <p className={styles.headerEyebrow}>Conversation</p>
+              <h1 className={styles.headerTitle}>Write naturally. Keep context automatically.</h1>
+            </div>
 
-          <div className={styles.workspaceBody}>
-            <motion.section
-              initial={{ opacity: 0, y: 24 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4 }}
-              className={styles.hero}
-            >
-              <p className={styles.eyebrow}>Verixa AI</p>
-              <h1 className={styles.title}>Make rough prompts feel intentional.</h1>
-              <p className={styles.subtitle}>
-                A focused workspace for turning vague input into something clearer,
-                sharper, and more presentable without drowning the experience in noise.
-              </p>
-            </motion.section>
+            <label className={styles.modeSelectWrap}>
+              <span>Mode</span>
+              <select
+                value={mode}
+                onChange={(event) => setMode(event.target.value)}
+                className={styles.modeSelect}
+              >
+                {MODE_OPTIONS.map((option) => (
+                  <option key={option.key} value={option.key}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </header>
 
-            {!authReady ? (
-              <motion.p {...revealProps} className={styles.status}>
-                Preparing workspace...
-              </motion.p>
-            ) : !supabaseConfigured ? (
-              <motion.div {...revealProps} className={styles.error}>
-                Supabase auth is not configured in this deployment yet. Add
-                `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
-                in Cloudflare variables and redeploy.
-              </motion.div>
-            ) : !session ? (
-              <motion.div {...revealProps} id="account-access" className={styles.authShell}>
-                <AuthPanel onAuthenticated={() => setAuthReady(true)} />
-              </motion.div>
-            ) : (
-              <motion.div {...revealProps} className={styles.composerShell}>
-                <div className={styles.composerIntro}>
-                  <p className={styles.composerKicker}>Message AI Chat</p>
-                  <p className={styles.composerHint}>
-                    Keep asking follow-up questions in the same chat. Start a new chat from sidebar only when you want a fresh context.
-                  </p>
-                </div>
+          {!authReady ? (
+            <p className={styles.infoText}>Preparing workspace...</p>
+          ) : !supabaseConfigured ? (
+            <p className={styles.errorText}>
+              Supabase auth is not configured in this deployment. Add
+              NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY.
+            </p>
+          ) : !session ? (
+            <div id="account-access" className={styles.authWrap}>
+              <AuthPanel onAuthenticated={() => setAuthReady(true)} />
+            </div>
+          ) : (
+            <>
+              <div ref={threadRef} className={styles.thread}>
+                {turns.length === 0 && !pendingPrompt ? (
+                  <div className={styles.emptyThread}>
+                    <h2>Start a proper conversation</h2>
+                    <p>
+                      Ask anything below. Your responses stay in this chat, so follow-ups keep context.
+                    </p>
+                  </div>
+                ) : null}
 
-                <InputBox
-                  input={input}
-                  mode={mode}
-                  onInputChange={setInput}
-                  onModeChange={handleModeChange}
-                  onGenerate={handleGenerate}
-                  loading={loading}
-                />
-              </motion.div>
-            )}
+                {turns.map((turn) => (
+                  <div key={turnIdentity(turn)} className={styles.turnBlock}>
+                    <article className={`${styles.message} ${styles.userMessage}`}>
+                      <p>{turn.input}</p>
+                    </article>
 
-            {session && loading ? (
-              <motion.p {...revealProps} className={styles.status}>
-                Transforming your input...
-              </motion.p>
-            ) : null}
-
-            {session && error ? (
-              <motion.div {...revealProps} className={styles.error}>
-                {error}
-              </motion.div>
-            ) : null}
-
-            {session && turns.length > 0 ? (
-              <section className={styles.threadPanel}>
-                <p className={styles.threadTitle}>Current chat</p>
-                <div className={styles.threadList}>
-                  {turns.slice(-8).map((turn) => (
-                    <article key={turn.timestamp} className={styles.threadItem}>
-                      <p className={styles.threadQuestion}>{turn.input}</p>
-                      <p className={styles.threadAnswer}>{turn.output}</p>
-                      <div className={styles.threadMetaRow}>
-                        <span className={styles.threadMetaChip}>Score {Math.round(turn.score)}</span>
-                        <span className={styles.threadMetaChip}>Confidence {Math.round(turn.confidence || 0)}</span>
-                        <span className={styles.threadMetaChip}>{turn.tone || "neutral"}</span>
+                    <article
+                      className={`${styles.message} ${styles.assistantMessage}`}
+                      onClick={() => setSelectedTurnId(turnIdentity(turn))}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          setSelectedTurnId(turnIdentity(turn));
+                        }
+                      }}
+                    >
+                      <p>{turn.output}</p>
+                      <div className={styles.messageMeta}>
+                        <span>Score {Math.round(turn.score)}</span>
+                        <span>Conf {Math.round(turn.confidence || 0)}</span>
+                        <span>{turn.tone || "neutral"}</span>
                       </div>
                     </article>
-                  ))}
-                </div>
-              </section>
-            ) : null}
-
-            {session && output ? (
-              <div className={styles.stack}>
-                <motion.div {...revealProps}>
-                  <p className={styles.iterationLabel}>Refinement iteration {iterationCount}</p>
-                  <ResultPanel rawInput={rawInput} normalizedInput={normalizedInput} output={output} />
-                </motion.div>
-
-                <motion.div {...revealProps} className={styles.stack}>
-                  <ScoreCard score={score} confidence={confidence} tone={tone} />
-
-                  <div className={styles.actionRow}>
-                    <button onClick={handleCopy} className={styles.ghostButton}>
-                      {copied ? "Copied" : "Copy"}
-                    </button>
-                    <button
-                      onClick={handleRefine}
-                      className={styles.refineButton}
-                      disabled={loading || score > 90}
-                    >
-                      {score > 90 ? "Already polished" : "Refine again"}
-                    </button>
-                    <button
-                      onClick={() => setShowDetails((current) => !current)}
-                      className={styles.toggleButton}
-                    >
-                      {showDetails ? "Hide details" : "View details"}
-                    </button>
                   </div>
-                </motion.div>
+                ))}
 
-                {showDetails ? (
-                  <motion.div {...revealProps}>
-                    <InsightsPanel issues={issues} improvements={improvements} reasoning={reasoning} />
-                  </motion.div>
+                {pendingPrompt ? (
+                  <div className={styles.turnBlock}>
+                    <article className={`${styles.message} ${styles.userMessage}`}>
+                      <p>{pendingPrompt}</p>
+                    </article>
+                    <article className={`${styles.message} ${styles.assistantMessage}`}>
+                      <p className={styles.typing}>Generating response...</p>
+                    </article>
+                  </div>
                 ) : null}
               </div>
-            ) : null}
-          </div>
+
+              {error ? <p className={styles.errorText}>{error}</p> : null}
+
+              <form
+                className={styles.composer}
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void handleGenerate();
+                }}
+              >
+                <textarea
+                  value={draft}
+                  onChange={(event) => setDraft(event.target.value)}
+                  onKeyDown={handleComposerKeyDown}
+                  placeholder="Message Verixa AI..."
+                  className={styles.composerInput}
+                />
+                <button type="submit" className={styles.sendButton} disabled={!canSend}>
+                  {loading ? "Generating..." : "Send"}
+                </button>
+              </form>
+            </>
+          )}
         </section>
+
+        <aside className={styles.inspector}>
+          <p className={styles.inspectorLabel}>Chat details</p>
+          {activeTurn ? (
+            <div className={styles.inspectorCard}>
+              <p className={styles.inspectorTitle}>Latest analysis</p>
+              <p className={styles.inspectorValue}>Score {Math.round(activeTurn.score)}</p>
+              <p className={styles.inspectorValue}>
+                Confidence {Math.round(activeTurn.confidence || 0)}
+              </p>
+              <p className={styles.inspectorValue}>Tone {activeTurn.tone || "neutral"}</p>
+              <p className={styles.inspectorReasoning}>
+                {activeTurn.reasoning || "No reasoning provided."}
+              </p>
+            </div>
+          ) : (
+            <p className={styles.infoText}>No turn selected yet.</p>
+          )}
+        </aside>
       </div>
     </main>
   );

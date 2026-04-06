@@ -1,6 +1,7 @@
 import type { HistoryItem } from "@/components/HistoryPanel";
 
-const SESSION_STORAGE_KEY = "verexa_memory_session_id";
+const SESSION_STORAGE_KEY_PREFIX = "verexa_memory_session_id";
+const CHAT_STORAGE_KEY_PREFIX = "verexa_chat_sessions";
 const configuredMemoryApiBaseUrl =
   process.env.NEXT_PUBLIC_MEMORY_API_URL?.trim().replace(/\/+$/, "") ||
   process.env.NEXT_PUBLIC_MEMORY_API_BASE_URL?.trim().replace(/\/+$/, "");
@@ -46,28 +47,110 @@ function getMemoryApiBaseUrl(): string {
   return "";
 }
 
-export function getStoredSessionId(): string {
+export type ChatSessionSummary = {
+  sessionId: string;
+  title: string;
+  updatedAt: number;
+  preview?: string;
+};
+
+function safeUserKey(userId?: string): string {
+  return String(userId || "guest").trim() || "guest";
+}
+
+function getSessionStorageKey(userId?: string): string {
+  return `${SESSION_STORAGE_KEY_PREFIX}:${safeUserKey(userId)}`;
+}
+
+function getChatStorageKey(userId?: string): string {
+  return `${CHAT_STORAGE_KEY_PREFIX}:${safeUserKey(userId)}`;
+}
+
+export function getStoredSessionId(userId?: string): string {
   if (typeof window === "undefined") {
     return "";
   }
 
-  return window.localStorage.getItem(SESSION_STORAGE_KEY) || "";
+  return window.localStorage.getItem(getSessionStorageKey(userId)) || "";
 }
 
-function storeSessionId(sessionId: string): void {
+function storeSessionId(sessionId: string, userId?: string): void {
   if (typeof window === "undefined") {
     return;
   }
 
-  window.localStorage.setItem(SESSION_STORAGE_KEY, sessionId);
+  window.localStorage.setItem(getSessionStorageKey(userId), sessionId);
 }
 
-export function clearStoredSessionId(): void {
+export function setStoredSessionId(sessionId: string, userId?: string): void {
+  storeSessionId(sessionId, userId);
+}
+
+export function clearStoredSessionId(userId?: string): void {
   if (typeof window === "undefined") {
     return;
   }
 
-  window.localStorage.removeItem(SESSION_STORAGE_KEY);
+  window.localStorage.removeItem(getSessionStorageKey(userId));
+}
+
+export function getStoredChatSessions(userId?: string): ChatSessionSummary[] {
+  if (typeof window === "undefined") {
+    return [];
+  }
+
+  const raw = window.localStorage.getItem(getChatStorageKey(userId));
+  if (!raw) {
+    return [];
+  }
+
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+
+    return parsed
+      .map((item) => ({
+        sessionId:
+          typeof item === "object" && item && "sessionId" in item
+            ? String((item as { sessionId?: string }).sessionId || "").trim()
+            : "",
+        title:
+          typeof item === "object" && item && "title" in item
+            ? String((item as { title?: string }).title || "New chat").trim() || "New chat"
+            : "New chat",
+        updatedAt:
+          typeof item === "object" && item && "updatedAt" in item
+            ? Number((item as { updatedAt?: number }).updatedAt) || 0
+            : 0,
+        preview:
+          typeof item === "object" && item && "preview" in item
+            ? String((item as { preview?: string }).preview || "")
+            : "",
+      }))
+      .filter((item) => Boolean(item.sessionId))
+      .sort((a, b) => b.updatedAt - a.updatedAt);
+  } catch {
+    return [];
+  }
+}
+
+function storeChatSessions(items: ChatSessionSummary[], userId?: string): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.localStorage.setItem(getChatStorageKey(userId), JSON.stringify(items));
+}
+
+export function upsertStoredChatSession(summary: ChatSessionSummary, userId?: string): ChatSessionSummary[] {
+  const current = getStoredChatSessions(userId);
+  const next = [summary, ...current.filter((item) => item.sessionId !== summary.sessionId)]
+    .sort((a, b) => b.updatedAt - a.updatedAt)
+    .slice(0, 40);
+  storeChatSessions(next, userId);
+  return next;
 }
 
 export async function createMemorySession(userId?: string, title?: string): Promise<string> {
@@ -107,12 +190,23 @@ export async function createMemorySession(userId?: string, title?: string): Prom
     throw new Error("Memory session response was invalid");
   }
 
-  storeSessionId(sessionId);
+  storeSessionId(sessionId, userId);
+
+  upsertStoredChatSession(
+    {
+      sessionId,
+      title: title?.trim() || "New chat",
+      preview: "",
+      updatedAt: Date.now(),
+    },
+    userId,
+  );
+
   return sessionId;
 }
 
 export async function ensureMemorySession(userId?: string): Promise<string> {
-  const existingSessionId = getStoredSessionId();
+  const existingSessionId = getStoredSessionId(userId);
   if (existingSessionId) {
     return existingSessionId;
   }
