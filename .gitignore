@@ -9,6 +9,8 @@ frontend/.next/
 frontend/.open-next/
 frontend/.wrangler/
 frontend/dev-server.log
+frontend/tsconfig.tsbuildinfo
+memory-worker/.wrangler/
 
 # python
 __pycache__/

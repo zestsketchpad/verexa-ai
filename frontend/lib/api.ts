@@ -2,6 +2,7 @@ export type GenerateResponse = {
   raw_input?: string;
   normalized_input?: string;
   mode?: string;
+  session_id?: string;
   verified_response?: string;
   outputs?: {
     professional?: string;
@@ -14,6 +15,7 @@ export type GenerateResponse = {
   tone?: string;
   issues_found?: string[];
   improvements_made?: string[];
+  reasoning?: string;
   error?: string;
 };
 
@@ -32,13 +34,13 @@ function getApiBaseUrl(): string {
   return productionApiBaseUrl;
 }
 
-export async function generateResponse(input: string, mode: string): Promise<GenerateResponse> {
+export async function generateResponse(input: string, mode: string, sessionId?: string): Promise<GenerateResponse> {
   const res = await fetch(`${getApiBaseUrl()}/verexa`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ input, mode }),
+    body: JSON.stringify({ input, mode, session_id: sessionId || undefined }),
   });
 
   const text = await res.text();
@@ -63,6 +65,10 @@ export async function generateResponse(input: string, mode: string): Promise<Gen
 
   if (!payload || typeof payload !== "object") {
     throw new Error("Invalid API response");
+  }
+
+  if ("error" in payload && typeof payload.error === "string" && payload.error.trim()) {
+    throw new Error(payload.error);
   }
 
   return payload as GenerateResponse;

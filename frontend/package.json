@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@opennextjs/cloudflare": "^1.18.0",
+    "@supabase/supabase-js": "^2.49.8",
     "framer-motion": "12.10.5",
     "next": "^15.3.9",
     "react": "19.1.0",
