@@ -8,6 +8,31 @@ type AuthPanelProps = {
   onAuthenticated: () => void;
 };
 
+function resolveAppOrigin(): string | undefined {
+  if (typeof window === "undefined") {
+    return undefined;
+  }
+
+  const raw =
+    process.env.NEXT_PUBLIC_SITE_URL?.trim() ||
+    process.env.NEXT_PUBLIC_APP_URL?.trim() ||
+    window.location.origin;
+
+  let candidate = raw;
+
+  if (!/^https?:\/\//i.test(candidate)) {
+    const host = candidate.split("/")[0] || "";
+    const isLocal = /^localhost(?::\d+)?$/i.test(host) || /^127\.0\.0\.1(?::\d+)?$/i.test(host);
+    candidate = `${isLocal ? "http" : "https"}://${candidate}`;
+  }
+
+  try {
+    return new URL(candidate).origin;
+  } catch {
+    return window.location.origin;
+  }
+}
+
 export default function AuthPanel({ onAuthenticated }: AuthPanelProps) {
   const supabase = useMemo(() => createSupabaseBrowserClient(), []);
   const [email, setEmail] = useState("");
@@ -52,9 +77,14 @@ export default function AuthPanel({ onAuthenticated }: AuthPanelProps) {
     resetMessages();
     setLoading(true);
 
+    const emailRedirectTo = resolveAppOrigin();
+
     const { error: signUpError } = await supabase.auth.signUp({
       email: email.trim(),
       password,
+      options: {
+        emailRedirectTo,
+      },
     });
 
     if (signUpError) {
@@ -75,16 +105,38 @@ export default function AuthPanel({ onAuthenticated }: AuthPanelProps) {
     resetMessages();
     setLoading(true);
 
-    const { error: oauthError } = await supabase.auth.signInWithOAuth({
+    const redirectTo = resolveAppOrigin();
+
+    const { data, error: oauthError } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: typeof window !== "undefined" ? window.location.origin : undefined,
+        redirectTo,
+        skipBrowserRedirect: true,
       },
     });
 
     if (oauthError) {
       setError(oauthError.message);
       setLoading(false);
+      return;
+    }
+
+    const oauthUrl = String(data?.url || "").trim();
+    if (!oauthUrl) {
+      setError("OAuth URL could not be generated.");
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const url = new URL(oauthUrl);
+      if (redirectTo) {
+        url.searchParams.set("redirect_to", redirectTo);
+      }
+      window.location.assign(url.toString());
+      return;
+    } catch {
+      window.location.assign(oauthUrl);
       return;
     }
 
