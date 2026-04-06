@@ -17,8 +17,23 @@ export type GenerateResponse = {
   error?: string;
 };
 
+const configuredApiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL?.trim().replace(/\/+$/, "");
+const productionApiBaseUrl = "https://verexa-ai.onrender.com";
+
+function getApiBaseUrl(): string {
+  if (configuredApiBaseUrl) {
+    return configuredApiBaseUrl;
+  }
+
+  if (process.env.NODE_ENV !== "production") {
+    return "http://localhost:8000";
+  }
+
+  return productionApiBaseUrl;
+}
+
 export async function generateResponse(input: string, mode: string): Promise<GenerateResponse> {
-  const res = await fetch("http://localhost:8000/verexa", {
+  const res = await fetch(`${getApiBaseUrl()}/verexa`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
