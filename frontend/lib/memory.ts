@@ -4,6 +4,21 @@ const SESSION_STORAGE_KEY = "verexa_memory_session_id";
 const configuredMemoryApiBaseUrl =
   process.env.NEXT_PUBLIC_MEMORY_API_URL?.trim().replace(/\/+$/, "") ||
   process.env.NEXT_PUBLIC_MEMORY_API_BASE_URL?.trim().replace(/\/+$/, "");
+const MEMORY_TIMEOUT_MS = 8000;
+
+async function fetchWithTimeout(input: RequestInfo | URL, init: RequestInit = {}, timeoutMs = MEMORY_TIMEOUT_MS) {
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    return await fetch(input, {
+      ...init,
+      signal: controller.signal,
+    });
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
+}
 
 function isLocalOnlyUrl(url: string): boolean {
   try {
@@ -61,16 +76,25 @@ export async function createMemorySession(userId?: string, title?: string): Prom
     return "";
   }
 
-  const response = await fetch(`${memoryApiBaseUrl}/sessions`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      title: title?.trim() || "Verexa Session",
-      userId: userId || undefined,
-    }),
-  });
+  let response: Response;
+
+  try {
+    response = await fetchWithTimeout(`${memoryApiBaseUrl}/sessions`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        title: title?.trim() || "Verexa Session",
+        userId: userId || undefined,
+      }),
+    });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw new Error("Memory service timed out while creating session");
+    }
+    throw error;
+  }
 
   if (!response.ok) {
     throw new Error("Failed to create memory session");
@@ -104,7 +128,16 @@ export async function fetchMemoryHistory(sessionId: string): Promise<HistoryItem
     return [];
   }
 
-  const response = await fetch(`${memoryApiBaseUrl}/sessions/${resolvedSessionId}/history`);
+  let response: Response;
+
+  try {
+    response = await fetchWithTimeout(`${memoryApiBaseUrl}/sessions/${resolvedSessionId}/history`);
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw new Error("Memory history request timed out");
+    }
+    throw error;
+  }
   if (!response.ok) {
     throw new Error("Failed to load memory history");
   }

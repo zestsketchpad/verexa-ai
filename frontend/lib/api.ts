@@ -23,6 +23,21 @@ const configuredApiBaseUrl =
   process.env.NEXT_PUBLIC_API_BASE_URL?.trim().replace(/\/+$/, "") ||
   process.env.NEXT_PUBLIC_API_URL?.trim().replace(/\/+$/, "");
 const productionApiBaseUrl = "https://verexa-ai.onrender.com";
+const API_TIMEOUT_MS = 20000;
+
+async function fetchWithTimeout(input: RequestInfo | URL, init: RequestInit = {}, timeoutMs = API_TIMEOUT_MS) {
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    return await fetch(input, {
+      ...init,
+      signal: controller.signal,
+    });
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
+}
 
 function isLocalOnlyUrl(url: string): boolean {
   try {
@@ -51,13 +66,22 @@ function getApiBaseUrl(): string {
 }
 
 export async function generateResponse(input: string, mode: string, sessionId?: string): Promise<GenerateResponse> {
-  const res = await fetch(`${getApiBaseUrl()}/verexa`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ input, mode, session_id: sessionId || undefined }),
-  });
+  let res: Response;
+
+  try {
+    res = await fetchWithTimeout(`${getApiBaseUrl()}/verexa`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ input, mode, session_id: sessionId || undefined }),
+    });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw new Error("Generation request timed out. Please try again.");
+    }
+    throw error;
+  }
 
   const text = await res.text();
   let payload: unknown = null;
