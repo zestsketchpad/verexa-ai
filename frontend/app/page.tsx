@@ -86,10 +86,11 @@ export default function Home() {
     }
 
     let cancelled = false;
+    const activeUserId = session.user.id;
 
     async function initializeMemory() {
       try {
-        const nextSessionId = await ensureMemorySession(session.user.id);
+        const nextSessionId = await ensureMemorySession(activeUserId);
         if (cancelled) {
           return;
         }

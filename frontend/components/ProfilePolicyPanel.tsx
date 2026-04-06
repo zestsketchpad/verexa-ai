@@ -20,6 +20,12 @@ type FormState = {
   factual_strictness: string;
 };
 
+type UserProfileRow = FormState & {
+  id: string;
+  email: string | null;
+  updated_at?: string | null;
+};
+
 const defaultState: FormState = {
   full_name: "",
   company: "",
@@ -41,12 +47,12 @@ export default function ProfilePolicyPanel({ user }: ProfilePolicyPanelProps) {
 
   useEffect(() => {
     let cancelled = false;
+    const profilesTable = supabase.from("user_profiles" as never) as any;
 
     async function loadProfile() {
       setLoading(true);
 
-      const { data, error } = await supabase
-        .from("user_profiles")
+      const { data, error } = await profilesTable
         .select("*")
         .eq("id", user.id)
         .maybeSingle();
@@ -105,8 +111,9 @@ export default function ProfilePolicyPanel({ user }: ProfilePolicyPanelProps) {
   const handleSave = async () => {
     setSaving(true);
     setStatus("");
+    const profilesTable = supabase.from("user_profiles" as never) as any;
 
-    const { error } = await supabase.from("user_profiles").upsert(
+    const { error } = await profilesTable.upsert(
       {
         id: user.id,
         email: user.email,
