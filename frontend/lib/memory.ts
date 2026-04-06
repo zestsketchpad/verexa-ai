@@ -47,12 +47,15 @@ function storeSessionId(sessionId: string): void {
   window.localStorage.setItem(SESSION_STORAGE_KEY, sessionId);
 }
 
-export async function ensureMemorySession(userId?: string): Promise<string> {
-  const existingSessionId = getStoredSessionId();
-  if (existingSessionId) {
-    return existingSessionId;
+export function clearStoredSessionId(): void {
+  if (typeof window === "undefined") {
+    return;
   }
 
+  window.localStorage.removeItem(SESSION_STORAGE_KEY);
+}
+
+export async function createMemorySession(userId?: string, title?: string): Promise<string> {
   const memoryApiBaseUrl = getMemoryApiBaseUrl();
   if (!memoryApiBaseUrl) {
     return "";
@@ -64,7 +67,7 @@ export async function ensureMemorySession(userId?: string): Promise<string> {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      title: "Verexa Session",
+      title: title?.trim() || "Verexa Session",
       userId: userId || undefined,
     }),
   });
@@ -82,6 +85,15 @@ export async function ensureMemorySession(userId?: string): Promise<string> {
 
   storeSessionId(sessionId);
   return sessionId;
+}
+
+export async function ensureMemorySession(userId?: string): Promise<string> {
+  const existingSessionId = getStoredSessionId();
+  if (existingSessionId) {
+    return existingSessionId;
+  }
+
+  return createMemorySession(userId, "Verexa Session");
 }
 
 export async function fetchMemoryHistory(sessionId: string): Promise<HistoryItem[]> {

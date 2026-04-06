@@ -17,12 +17,13 @@ export type HistoryItem = {
 type HistoryPanelProps = {
   history: HistoryItem[];
   onSelect: (item: HistoryItem) => void;
+  showLabel?: boolean;
 };
 
-export default function HistoryPanel({ history, onSelect }: HistoryPanelProps) {
+export default function HistoryPanel({ history, onSelect, showLabel = true }: HistoryPanelProps) {
   return (
     <div className={styles.panel}>
-      <p className={styles.label}>Recent</p>
+      {showLabel ? <p className={styles.label}>Recent</p> : null}
 
       {history.length === 0 ? (
         <p className={styles.empty}>No history yet.</p>
@@ -36,7 +37,9 @@ export default function HistoryPanel({ history, onSelect }: HistoryPanelProps) {
               className={styles.item}
             >
               <p className={styles.input}>{item.input}</p>
-              <p className={styles.meta}>Score: {Math.round(item.score)}</p>
+              <p className={styles.meta}>
+                Score {Math.round(item.score)} | Conf {Math.round(item.confidence || 0)}
+              </p>
             </button>
           ))}
         </div>
