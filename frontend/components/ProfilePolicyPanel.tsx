@@ -46,6 +46,12 @@ export default function ProfilePolicyPanel({ user }: ProfilePolicyPanelProps) {
   const [collapsed, setCollapsed] = useState(false);
 
   useEffect(() => {
+    if (!supabase) {
+      setStatus("Supabase profile settings are not configured for this deployment yet.");
+      setLoading(false);
+      return;
+    }
+
     let cancelled = false;
     const profilesTable = supabase.from("user_profiles" as never) as any;
 
@@ -109,6 +115,10 @@ export default function ProfilePolicyPanel({ user }: ProfilePolicyPanelProps) {
   };
 
   const handleSave = async () => {
+    if (!supabase) {
+      setStatus("Supabase profile settings are not configured for this deployment yet.");
+      return;
+    }
     setSaving(true);
     setStatus("");
     const profilesTable = supabase.from("user_profiles" as never) as any;
@@ -135,6 +145,10 @@ export default function ProfilePolicyPanel({ user }: ProfilePolicyPanelProps) {
   };
 
   const handleSignOut = async () => {
+    if (!supabase) {
+      window.location.reload();
+      return;
+    }
     await supabase.auth.signOut();
     window.location.reload();
   };

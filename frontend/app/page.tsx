@@ -12,7 +12,7 @@ import HistoryPanel, { type HistoryItem } from "@/components/HistoryPanel";
 import ProfilePolicyPanel from "@/components/ProfilePolicyPanel";
 import { generateResponse } from "@/lib/api";
 import { ensureMemorySession, fetchMemoryHistory, getStoredSessionId } from "@/lib/memory";
-import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { createSupabaseBrowserClient, hasSupabaseBrowserConfig } from "@/lib/supabase/client";
 import styles from "./page.module.css";
 
 const revealProps = {
@@ -22,12 +22,9 @@ const revealProps = {
 };
 
 export default function Home() {
+  const supabaseConfigured = hasSupabaseBrowserConfig();
   const supabase = useMemo(() => {
-    try {
-      return createSupabaseBrowserClient();
-    } catch {
-      return null;
-    }
+    return createSupabaseBrowserClient();
   }, []);
   const [authReady, setAuthReady] = useState(false);
   const [session, setSession] = useState<Session | null>(null);
@@ -309,6 +306,12 @@ export default function Home() {
           <motion.p {...revealProps} className={styles.status}>
             Preparing workspace...
           </motion.p>
+        ) : !supabaseConfigured ? (
+          <motion.div {...revealProps} className={styles.error}>
+            Supabase auth is not configured in this deployment yet. Add
+            `NEXT_PUBLIC_SUPABASE_URL` and
+            `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` in Cloudflare variables and redeploy.
+          </motion.div>
         ) : !session ? (
           <motion.div {...revealProps}>
             <AuthPanel onAuthenticated={() => setAuthReady(true)} />

@@ -22,6 +22,10 @@ export default function AuthPanel({ onAuthenticated }: AuthPanelProps) {
   };
 
   const handleEmailSignIn = async () => {
+    if (!supabase) {
+      setError("Supabase auth is not configured for this deployment yet.");
+      return;
+    }
     resetMessages();
     setLoading(true);
 
@@ -41,6 +45,10 @@ export default function AuthPanel({ onAuthenticated }: AuthPanelProps) {
   };
 
   const handleEmailSignUp = async () => {
+    if (!supabase) {
+      setError("Supabase auth is not configured for this deployment yet.");
+      return;
+    }
     resetMessages();
     setLoading(true);
 
@@ -60,6 +68,10 @@ export default function AuthPanel({ onAuthenticated }: AuthPanelProps) {
   };
 
   const handleGoogleSignIn = async () => {
+    if (!supabase) {
+      setError("Supabase auth is not configured for this deployment yet.");
+      return;
+    }
     resetMessages();
     setLoading(true);
 
@@ -131,7 +143,7 @@ export default function AuthPanel({ onAuthenticated }: AuthPanelProps) {
       <button
         type="button"
         onClick={handleGoogleSignIn}
-        disabled={loading}
+        disabled={loading || !supabase}
         className={styles.googleButton}
       >
         Continue with Google
