@@ -19,11 +19,27 @@ export type GenerateResponse = {
   error?: string;
 };
 
-const configuredApiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL?.trim().replace(/\/+$/, "");
+const configuredApiBaseUrl =
+  process.env.NEXT_PUBLIC_API_BASE_URL?.trim().replace(/\/+$/, "") ||
+  process.env.NEXT_PUBLIC_API_URL?.trim().replace(/\/+$/, "");
 const productionApiBaseUrl = "https://verexa-ai.onrender.com";
+
+function isLocalOnlyUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname.toLowerCase();
+    return host === "localhost" || host === "127.0.0.1" || host === "0.0.0.0";
+  } catch {
+    return false;
+  }
+}
 
 function getApiBaseUrl(): string {
   if (configuredApiBaseUrl) {
+    if (process.env.NODE_ENV === "production" && isLocalOnlyUrl(configuredApiBaseUrl)) {
+      return productionApiBaseUrl;
+    }
+
     return configuredApiBaseUrl;
   }
 

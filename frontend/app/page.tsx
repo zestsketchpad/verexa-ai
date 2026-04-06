@@ -137,6 +137,23 @@ export default function Home() {
     }
   };
 
+  const resolveSessionId = async (): Promise<string> => {
+    if (sessionId) {
+      return sessionId;
+    }
+
+    try {
+      const nextSessionId = await ensureMemorySession(session?.user.id);
+      if (nextSessionId && nextSessionId !== sessionId) {
+        setSessionId(nextSessionId);
+      }
+      return nextSessionId;
+    } catch (err) {
+      console.error("Memory session setup failed, continuing without session.", err);
+      return "";
+    }
+  };
+
   const handleGenerate = async (text: string) => {
     const trimmed = text.trim();
 
@@ -155,10 +172,7 @@ export default function Home() {
     setIterationCount(1);
 
     try {
-      const nextSessionId = sessionId || (await ensureMemorySession(session?.user.id));
-      if (nextSessionId && nextSessionId !== sessionId) {
-        setSessionId(nextSessionId);
-      }
+      const nextSessionId = await resolveSessionId();
 
       const data = await generateResponse(trimmed, mode, nextSessionId);
 
@@ -197,10 +211,7 @@ export default function Home() {
     setShowDetails(false);
 
     try {
-      const nextSessionId = sessionId || (await ensureMemorySession(session?.user.id));
-      if (nextSessionId && nextSessionId !== sessionId) {
-        setSessionId(nextSessionId);
-      }
+      const nextSessionId = await resolveSessionId();
 
       const data = await generateResponse(refinedInput, mode, nextSessionId);
       setInput(refinedInput);
@@ -233,10 +244,7 @@ export default function Home() {
       setShowDetails(false);
 
       try {
-        const nextSessionId = sessionId || (await ensureMemorySession(session?.user.id));
-        if (nextSessionId && nextSessionId !== sessionId) {
-          setSessionId(nextSessionId);
-        }
+        const nextSessionId = await resolveSessionId();
 
         const data = await generateResponse(input.trim(), nextMode, nextSessionId);
 

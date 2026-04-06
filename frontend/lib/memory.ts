@@ -1,10 +1,26 @@
 import type { HistoryItem } from "@/components/HistoryPanel";
 
 const SESSION_STORAGE_KEY = "verexa_memory_session_id";
-const configuredMemoryApiBaseUrl = process.env.NEXT_PUBLIC_MEMORY_API_URL?.trim().replace(/\/+$/, "");
+const configuredMemoryApiBaseUrl =
+  process.env.NEXT_PUBLIC_MEMORY_API_URL?.trim().replace(/\/+$/, "") ||
+  process.env.NEXT_PUBLIC_MEMORY_API_BASE_URL?.trim().replace(/\/+$/, "");
+
+function isLocalOnlyUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname.toLowerCase();
+    return host === "localhost" || host === "127.0.0.1" || host === "0.0.0.0";
+  } catch {
+    return false;
+  }
+}
 
 function getMemoryApiBaseUrl(): string {
   if (configuredMemoryApiBaseUrl) {
+    if (process.env.NODE_ENV === "production" && isLocalOnlyUrl(configuredMemoryApiBaseUrl)) {
+      return "";
+    }
+
     return configuredMemoryApiBaseUrl;
   }
 
