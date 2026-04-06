@@ -1,5 +1,6 @@
 export interface Env {
   DB: D1Database;
+  ALLOWED_ORIGINS?: string;
 }
 
 type SessionPayload = {
@@ -30,16 +31,38 @@ type ProfileFactPayload = {
   }>;
 };
 
-function json(data: unknown, status = 200): Response {
+function resolveAllowedOrigin(request: Request, env: Env): string {
+  const requestOrigin = request.headers.get("origin") || "";
+  const configuredOrigins = String(env.ALLOWED_ORIGINS || "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  if (configuredOrigins.length === 0) {
+    return "*";
+  }
+
+  return configuredOrigins.includes(requestOrigin) ? requestOrigin : configuredOrigins[0];
+}
+
+function json(request: Request, env: Env, data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
     status,
     headers: {
       "content-type": "application/json; charset=utf-8",
-      "access-control-allow-origin": "*",
+      "access-control-allow-origin": resolveAllowedOrigin(request, env),
       "access-control-allow-methods": "GET,POST,OPTIONS",
       "access-control-allow-headers": "Content-Type",
     },
   });
+}
+
+async function readJsonBody<T>(request: Request): Promise<T | null> {
+  try {
+    return (await request.json()) as T;
+  } catch {
+    return null;
+  }
 }
 
 function now(): number {
@@ -76,13 +99,15 @@ async function upsertSession(env: Env, payload: SessionPayload): Promise<{ sessi
   return { sessionId };
 }
 
-async function writeMemory(env: Env, payload: MemoryWritePayload): Promise<Response> {
+async function writeMemory(request: Request, env: Env, payload: MemoryWritePayload): Promise<Response> {
   const sessionId = payload.sessionId?.trim();
   const userInput = payload.userInput?.trim();
   const verifiedResponse = payload.verifiedResponse?.trim();
 
   if (!sessionId || !userInput || !verifiedResponse) {
     return json(
+      request,
+      env,
       { error: "sessionId, userInput, and verifiedResponse are required" },
       400,
     );
@@ -130,15 +155,15 @@ async function writeMemory(env: Env, payload: MemoryWritePayload): Promise<Respo
     .bind(timestamp, sessionId)
     .run();
 
-  return json({ ok: true, id: itemId, sessionId });
+  return json(request, env, { ok: true, id: itemId, sessionId });
 }
 
-async function upsertProfileFacts(env: Env, payload: ProfileFactPayload): Promise<Response> {
+async function upsertProfileFacts(request: Request, env: Env, payload: ProfileFactPayload): Promise<Response> {
   const sessionId = payload.sessionId?.trim();
   const facts = Array.isArray(payload.facts) ? payload.facts : [];
 
   if (!sessionId) {
-    return json({ error: "sessionId is required" }, 400);
+    return json(request, env, { error: "sessionId is required" }, 400);
   }
 
   await upsertSession(env, { sessionId });
@@ -189,10 +214,10 @@ async function upsertProfileFacts(env: Env, payload: ProfileFactPayload): Promis
     written += 1;
   }
 
-  return json({ ok: true, sessionId, written });
+  return json(request, env, { ok: true, sessionId, written });
 }
 
-async function getProfileFacts(env: Env, sessionId: string): Promise<Response> {
+async function getProfileFacts(request: Request, env: Env, sessionId: string): Promise<Response> {
   const result = await env.DB.prepare(
     `
       SELECT
@@ -209,13 +234,13 @@ async function getProfileFacts(env: Env, sessionId: string): Promise<Response> {
     .bind(sessionId)
     .all();
 
-  return json({
+  return json(request, env, {
     sessionId,
     facts: result.results ?? [],
   });
 }
 
-async function listSessionHistory(env: Env, sessionId: string): Promise<Response> {
+async function listSessionHistory(request: Request, env: Env, sessionId: string): Promise<Response> {
   const result = await env.DB.prepare(
     `
       SELECT
@@ -238,19 +263,22 @@ async function listSessionHistory(env: Env, sessionId: string): Promise<Response
     .bind(sessionId)
     .all();
 
-  return json({
+  return json(request, env, {
     sessionId,
     items: result.results ?? [],
   });
 }
 
 async function searchMemory(env: Env, request: Request): Promise<Response> {
-  const body = (await request.json()) as { sessionId?: string; query?: string };
+  const body = await readJsonBody<{ sessionId?: string; query?: string }>(request);
+  if (!body) {
+    return json(request, env, { error: "Invalid JSON body" }, 400);
+  }
   const sessionId = body.sessionId?.trim();
   const query = body.query?.trim();
 
   if (!sessionId || !query) {
-    return json({ error: "sessionId and query are required" }, 400);
+    return json(request, env, { error: "sessionId and query are required" }, 400);
   }
 
   const likeQuery = `%${query}%`;
@@ -281,7 +309,7 @@ async function searchMemory(env: Env, request: Request): Promise<Response> {
     .bind(sessionId, likeQuery, likeQuery, likeQuery, likeQuery)
     .all();
 
-  return json({
+  return json(request, env, {
     sessionId,
     query,
     items: result.results ?? [],
@@ -293,22 +321,28 @@ export default {
     const url = new URL(request.url);
 
     if (request.method === "OPTIONS") {
-      return json({ ok: true });
+      return json(request, env, { ok: true });
     }
 
     if (request.method === "GET" && url.pathname === "/health") {
-      return json({ ok: true, service: "verexa-memory-worker" });
+      return json(request, env, { ok: true, service: "verexa-memory-worker" });
     }
 
     if (request.method === "POST" && url.pathname === "/sessions") {
-      const body = (await request.json()) as SessionPayload;
+      const body = await readJsonBody<SessionPayload>(request);
+      if (!body) {
+        return json(request, env, { error: "Invalid JSON body" }, 400);
+      }
       const result = await upsertSession(env, body);
-      return json(result);
+      return json(request, env, result);
     }
 
     if (request.method === "POST" && url.pathname === "/memory/write") {
-      const body = (await request.json()) as MemoryWritePayload;
-      return writeMemory(env, body);
+      const body = await readJsonBody<MemoryWritePayload>(request);
+      if (!body) {
+        return json(request, env, { error: "Invalid JSON body" }, 400);
+      }
+      return writeMemory(request, env, body);
     }
 
     if (request.method === "POST" && url.pathname === "/memory/search") {
@@ -316,20 +350,23 @@ export default {
     }
 
     if (request.method === "POST" && url.pathname === "/profile/upsert") {
-      const body = (await request.json()) as ProfileFactPayload;
-      return upsertProfileFacts(env, body);
+      const body = await readJsonBody<ProfileFactPayload>(request);
+      if (!body) {
+        return json(request, env, { error: "Invalid JSON body" }, 400);
+      }
+      return upsertProfileFacts(request, env, body);
     }
 
     const profileMatch = url.pathname.match(/^\/sessions\/([^/]+)\/profile$/);
     if (request.method === "GET" && profileMatch) {
-      return getProfileFacts(env, profileMatch[1]);
+      return getProfileFacts(request, env, profileMatch[1]);
     }
 
     const historyMatch = url.pathname.match(/^\/sessions\/([^/]+)\/history$/);
     if (request.method === "GET" && historyMatch) {
-      return listSessionHistory(env, historyMatch[1]);
+      return listSessionHistory(request, env, historyMatch[1]);
     }
 
-    return json({ error: "Not found" }, 404);
+    return json(request, env, { error: "Not found" }, 404);
   },
 } satisfies ExportedHandler<Env>;

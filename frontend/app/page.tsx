@@ -1,74 +1,138 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useMemo, useState, type KeyboardEvent } from "react";
 import type { Session } from "@supabase/supabase-js";
+import { motion } from "framer-motion";
 import AuthPanel from "@/components/AuthPanel";
-import type { HistoryItem } from "@/components/HistoryPanel";
+import EmptyState from "@/components/EmptyState";
+import LoadingState from "@/components/LoadingState";
+import OnboardingModal from "@/components/OnboardingModal";
 import ProfileDock from "@/components/ProfileDock";
+import ResultPanel from "@/components/ResultPanel";
+import SavedResponsesPanel from "@/components/SavedResponsesPanel";
+import ScoreCard from "@/components/ScoreCard";
+import ToneSelector, { type ToneOption } from "@/components/ToneSelector";
 import { generateResponse } from "@/lib/api";
-import {
-  clearStoredSessionId,
-  createMemorySession,
-  fetchMemoryHistory,
-  getStoredChatSessions,
-  getStoredSessionId,
-  setStoredSessionId,
-  type ChatSessionSummary,
-  upsertStoredChatSession,
-} from "@/lib/memory";
+import { createMemorySession, getStoredSessionId, setStoredSessionId } from "@/lib/memory";
+import { getSavedResponses, removeSavedResponse, saveResponse, type SavedResponseItem } from "@/lib/savedResponses";
+import { buildAnalysisSummary, createShareSnapshot, downloadSummary, getShareSnapshot } from "@/lib/shareAnalysis";
+import { getDefaultStyleMemory, getStoredStyleMemory, type StyleMemory } from "@/lib/styleMemory";
 import { createSupabaseBrowserClient, hasSupabaseBrowserConfig } from "@/lib/supabase/client";
 import styles from "./page.module.css";
 
-const MODE_OPTIONS = [
-  { key: "auto", label: "Auto" },
-  { key: "coding", label: "Coding" },
-  { key: "email", label: "Email" },
-  { key: "explain", label: "Explain" },
-  { key: "brainstorm", label: "Ideas" },
+const AUTO_FIX_DELAY_MS = 1200;
+
+const LAUNCH_INTENT = "freelance" as const;
+const LAUNCH_PLATFORM = "upwork" as const;
+const LAUNCH_BACKEND_MODE = "proposal";
+const ROTATING_INPUT_PLACEHOLDERS = [
+  "Upwork: Hi, I saw your project and I can deliver this in 3 days with revision support...",
+  "Email: Following up on our last conversation. I can share a clear timeline and next steps...",
+  "LinkedIn: Thanks for connecting. I have a quick idea that can improve your response rate...",
 ];
+const ONBOARDING_STORAGE_PREFIX = "verexa_onboarding_seen";
+const ONBOARDING_DEMO_TEXT =
+  "Hi, I can build this landing page in 3 days with two revision rounds. My rate is $40/hour. If this works for you, I can start this week.";
 
-function toChronologicalTurns(items: HistoryItem[]): HistoryItem[] {
-  return [...items].sort((a, b) => a.timestamp - b.timestamp);
-}
+const cleanText = (text: string): string =>
+  String(text || "")
+    .replace(/â€™/g, "'")
+    .replace(/â€˜/g, "'")
+    .replace(/â€œ|â€\x9d|â€/g, '"')
+    .replace(/â€”/g, "—")
+    .replace(/â€“/g, "–");
 
-function deriveChatTitle(input: string): string {
-  const compact = input.trim().replace(/\s+/g, " ");
-  if (!compact) {
-    return "New chat";
+type QualityCheck = {
+  ruleName: string;
+  status: "pass" | "fail";
+  reason?: string;
+};
+
+function mapPolicyChecks(value: unknown): QualityCheck[] {
+  if (!value || typeof value !== "object" || !("rules" in value)) {
+    return [];
   }
 
-  return compact.length > 48 ? `${compact.slice(0, 48)}...` : compact;
-}
-
-function formatTime(timestamp: number): string {
-  try {
-    return new Date(timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  } catch {
-    return "Now";
+  const rules = (value as { rules?: unknown }).rules;
+  if (!Array.isArray(rules)) {
+    return [];
   }
+
+  return rules
+    .map((rule) => {
+      if (!rule || typeof rule !== "object") {
+        return null;
+      }
+
+      const item = rule as { rule_name?: unknown; status?: unknown; reason?: unknown };
+      const ruleName = cleanText(String(item.rule_name || "")).trim();
+      const status = String(item.status || "").toLowerCase() === "fail" ? "fail" : "pass";
+      const reason = cleanText(String(item.reason || "")).trim();
+
+      if (!ruleName) {
+        return null;
+      }
+
+      return {
+        ruleName,
+        status,
+        reason: reason || undefined,
+      } as QualityCheck;
+    })
+    .filter((item): item is QualityCheck => item !== null);
 }
 
-function turnIdentity(turn: HistoryItem): string {
-  return String(turn.id || turn.timestamp);
-}
+type AnalysisResult = {
+  rawInput: string;
+  normalizedInput: string;
+  output: string;
+  decision: "SAFE" | "MODIFY" | "RISKY";
+  score: number;
+  confidence: number;
+  tone: string;
+  issues: string[];
+  improvements: string[];
+  insights: string[];
+  clientPerspective: {
+    reaction: "positive" | "neutral" | "negative";
+    likelyReaction: string;
+    riskFactors: string[];
+    suggestedAdjustment: string;
+  };
+  qualityChecks: QualityCheck[];
+  variations: Array<{ label: string; text: string }>;
+  reasoning: string;
+};
 
 export default function Home() {
   const supabaseConfigured = hasSupabaseBrowserConfig();
   const supabase = useMemo(() => createSupabaseBrowserClient(), []);
-  const threadRef = useRef<HTMLDivElement | null>(null);
 
   const [authReady, setAuthReady] = useState(false);
   const [session, setSession] = useState<Session | null>(null);
+  const [tone, setTone] = useState<ToneOption>("professional");
   const [draft, setDraft] = useState("");
-  const [mode, setMode] = useState("auto");
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [turns, setTurns] = useState<HistoryItem[]>([]);
   const [sessionId, setSessionId] = useState("");
-  const [pendingPrompt, setPendingPrompt] = useState("");
-  const [chatSessions, setChatSessions] = useState<ChatSessionSummary[]>([]);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [selectedTurnId, setSelectedTurnId] = useState("");
+  const [result, setResult] = useState<AnalysisResult | null>(null);
+  const [refineInstruction, setRefineInstruction] = useState("");
+  const [styleMemory, setStyleMemory] = useState<StyleMemory>(getDefaultStyleMemory());
+  const [projectContext, setProjectContext] = useState("");
+  const [savedResponses, setSavedResponses] = useState<SavedResponseItem[]>([]);
+  const [autoFixMode, setAutoFixMode] = useState(false);
+  const [lastAnalyzedSignature, setLastAnalyzedSignature] = useState("");
+  const [shareHydrated, setShareHydrated] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [placeholderIndex, setPlaceholderIndex] = useState(0);
+
+  const getOnboardingStorageKey = (userId?: string) => `${ONBOARDING_STORAGE_PREFIX}:${String(userId || "guest")}`;
+
+  const markOnboardingSeen = (userId?: string) => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    window.localStorage.setItem(getOnboardingStorageKey(userId), "1");
+  };
 
   useEffect(() => {
     if (!supabase) {
@@ -79,10 +143,12 @@ export default function Home() {
     let mounted = true;
 
     supabase.auth.getSession().then(({ data }) => {
-      if (mounted) {
-        setSession(data.session ?? null);
-        setAuthReady(true);
+      if (!mounted) {
+        return;
       }
+
+      setSession(data.session ?? null);
+      setAuthReady(true);
     });
 
     const {
@@ -100,232 +166,375 @@ export default function Home() {
 
   useEffect(() => {
     if (!authReady || !session) {
-      setTurns([]);
       setSessionId("");
-      setChatSessions([]);
-      setSelectedTurnId("");
+      setResult(null);
+      setSavedResponses([]);
+      setShowOnboarding(false);
       return;
     }
 
-    const userId = session.user.id;
-    const storedChats = getStoredChatSessions(userId);
-    setChatSessions(storedChats);
+    const stored = getStoredSessionId(session.user.id);
+    if (stored) {
+      setSessionId(stored);
+    }
 
-    const activeSessionId =
-      getStoredSessionId(userId) || (storedChats.length > 0 ? storedChats[0].sessionId : "");
+    const savedStyle = getStoredStyleMemory(session.user.id);
+    setStyleMemory(savedStyle);
+    setTone(savedStyle.toneDefault);
+    setSavedResponses(getSavedResponses(session.user.id));
 
-    setSessionId(activeSessionId);
+    if (typeof window !== "undefined") {
+      const hasShareId = Boolean(new URLSearchParams(window.location.search).get("share"));
+      const seen = window.localStorage.getItem(getOnboardingStorageKey(session.user.id)) === "1";
+      setShowOnboarding(!seen && !hasShareId);
+    }
   }, [authReady, session]);
 
+  const handleOnboardingClose = () => {
+    if (session) {
+      markOnboardingSeen(session.user.id);
+    }
+    setShowOnboarding(false);
+  };
+
+  const handleOnboardingTryDemo = () => {
+    setDraft(ONBOARDING_DEMO_TEXT);
+    setProjectContext("Client type: Startup founder\nProject scope: Landing page + proposal follow-up\nBudget: $2k-$4k");
+    handleOnboardingClose();
+  };
+
   useEffect(() => {
-    if (!session || !sessionId) {
-      setTurns([]);
+    if (shareHydrated || !session || typeof window === "undefined") {
       return;
     }
 
-    let cancelled = false;
-
-    async function hydrate() {
-      setError("");
-
-      try {
-        const nextHistory = await fetchMemoryHistory(sessionId);
-        if (cancelled) {
-          return;
-        }
-
-        const nextTurns = toChronologicalTurns(nextHistory);
-        setTurns(nextTurns);
-
-        if (nextTurns.length > 0) {
-          setSelectedTurnId(turnIdentity(nextTurns[nextTurns.length - 1]));
-        }
-      } catch (err) {
-        console.error(err);
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : "Failed to load chat history.");
-        }
-      }
+    const shareId = new URLSearchParams(window.location.search).get("share");
+    if (!shareId) {
+      setShareHydrated(true);
+      return;
     }
 
-    void hydrate();
+    const snapshot = getShareSnapshot(shareId);
+    if (!snapshot) {
+      setShareHydrated(true);
+      return;
+    }
+
+    setDraft(snapshot.rawInput);
+    setProjectContext(snapshot.projectContext || "");
+    setResult({
+      rawInput: snapshot.rawInput,
+      normalizedInput: snapshot.rawInput,
+      output: snapshot.output,
+      decision: snapshot.decision,
+      score: snapshot.score,
+      confidence: snapshot.confidence,
+      tone: snapshot.tone,
+      issues: snapshot.issues,
+      improvements: snapshot.improvements,
+      insights: snapshot.insights.slice(0, 3),
+      clientPerspective: {
+        reaction: "neutral",
+        likelyReaction: "Shared snapshot loaded.",
+        riskFactors: [],
+        suggestedAdjustment: "Re-run analysis to refresh context and latest verification.",
+      },
+      qualityChecks: [],
+      variations: [],
+      reasoning: snapshot.reasoning,
+    });
+    setShareHydrated(true);
+  }, [shareHydrated, session]);
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      setPlaceholderIndex((current) => (current + 1) % ROTATING_INPUT_PLACEHOLDERS.length);
+    }, 3400);
 
     return () => {
-      cancelled = true;
+      window.clearInterval(intervalId);
     };
-  }, [session, sessionId]);
+  }, []);
 
-  useEffect(() => {
-    const node = threadRef.current;
-    if (!node) {
+  const handleSaveResponse = (text: string) => {
+    if (!session || !result) {
       return;
     }
 
-    node.scrollTo({ top: node.scrollHeight, behavior: "smooth" });
-  }, [turns, pendingPrompt]);
-
-  const handleNewChat = () => {
-    if (session) {
-      clearStoredSessionId(session.user.id);
-    }
-
-    setSessionId("");
-    setTurns([]);
-    setPendingPrompt("");
-    setSelectedTurnId("");
-    setError("");
+    const next = saveResponse(
+      {
+        text,
+        sourceInput: result.rawInput,
+        score: result.score,
+        decision: result.decision,
+        tone: result.tone,
+      },
+      session.user.id,
+    );
+    setSavedResponses(next);
   };
 
-  const handleSelectChat = (nextSessionId: string) => {
-    if (!session || !nextSessionId) {
+  const handleUseSavedResponse = (item: SavedResponseItem) => {
+    setDraft(item.text);
+  };
+
+  const handleRemoveSavedResponse = (id: string) => {
+    if (!session) {
+      return;
+    }
+    const next = removeSavedResponse(id, session.user.id);
+    setSavedResponses(next);
+  };
+
+  const handleShareAnalysis = () => {
+    if (!result || typeof window === "undefined") {
       return;
     }
 
-    setStoredSessionId(nextSessionId, session.user.id);
-    setSessionId(nextSessionId);
-    setPendingPrompt("");
-    setError("");
+    const snapshot = {
+      rawInput: result.rawInput,
+      output: result.output,
+      decision: result.decision,
+      score: result.score,
+      confidence: result.confidence,
+      tone: result.tone,
+      issues: result.issues,
+      improvements: result.improvements,
+      insights: result.insights,
+      reasoning: result.reasoning,
+      projectContext,
+      createdAt: Date.now(),
+    };
+
+    const shareId = createShareSnapshot(snapshot);
+    const url = new URL(window.location.href);
+    url.searchParams.set("share", shareId);
+    const shareLink = url.toString();
+
+    const summary = buildAnalysisSummary(snapshot);
+    downloadSummary(summary, `verexa-analysis-${shareId}.txt`);
+
+    void navigator.clipboard.writeText(shareLink);
   };
 
-  const handleGenerate = async () => {
+  const mapApiResult = (
+    data: Awaited<ReturnType<typeof generateResponse>>,
+    fallbackInput: string,
+  ): AnalysisResult => {
+    const output =
+      cleanText(String(data.verified_response || "").trim()) ||
+      "I could not generate a response. Please try again.";
+
+    return {
+      rawInput: data.raw_input || fallbackInput,
+      normalizedInput: data.normalized_input || fallbackInput,
+      output,
+      decision:
+        data.decision === "SAFE" || data.decision === "MODIFY" || data.decision === "RISKY"
+          ? data.decision
+          : "MODIFY",
+      score: typeof data.score === "number" ? data.score : 0,
+      confidence: typeof data.confidence === "number" ? data.confidence : 0,
+      tone: cleanText(String(data.tone || "neutral")),
+      issues: Array.isArray(data.issues_found) ? data.issues_found.map((item) => cleanText(item)) : [],
+      improvements: Array.isArray(data.improvements_made)
+        ? data.improvements_made.map((item) => cleanText(item))
+        : [],
+      insights: Array.isArray(data.insight_lines)
+        ? data.insight_lines.map((item) => cleanText(item)).slice(0, 3)
+        : [],
+      clientPerspective: {
+        reaction:
+          data.client_perspective?.reaction === "positive" ||
+          data.client_perspective?.reaction === "neutral" ||
+          data.client_perspective?.reaction === "negative"
+            ? data.client_perspective.reaction
+            : "neutral",
+        likelyReaction: cleanText(String(data.client_perspective?.likely_reaction || "")).trim(),
+        riskFactors: Array.isArray(data.client_perspective?.risk_factors)
+          ? data.client_perspective.risk_factors.map((item) => cleanText(String(item))).filter(Boolean)
+          : [],
+        suggestedAdjustment: cleanText(String(data.client_perspective?.suggested_adjustment || "")).trim(),
+      },
+      qualityChecks: mapPolicyChecks(data.policy_results),
+      variations: Array.isArray(data.variations)
+        ? data.variations
+            .map((item) => {
+              const safeItem = item as { label?: string; text?: string };
+              return {
+                label: cleanText(String(safeItem.label || "")).trim(),
+                text: cleanText(String(safeItem.text || "")).trim(),
+              };
+            })
+            .filter((item) => item.label && item.text)
+            .slice(0, 3)
+        : [],
+      reasoning: cleanText(String(data.reasoning || "")),
+    };
+  };
+
+  const buildAnalyzeSignature = (
+    inputText: string,
+    contextText: string,
+    selectedTone: ToneOption,
+  ) => `${inputText.trim()}||${contextText.trim()}||${selectedTone}||${LAUNCH_INTENT}||${LAUNCH_PLATFORM}`;
+
+  const handleAnalyze = async () => {
     const trimmed = draft.trim();
 
     if (!trimmed || loading || !session) {
       return;
     }
 
-    setDraft("");
     setLoading(true);
-    setError("");
-    setPendingPrompt(trimmed);
 
     let resolvedSessionId = sessionId;
+    const latestStyle = getStoredStyleMemory(session.user.id);
+    setStyleMemory(latestStyle);
+    setTone(latestStyle.toneDefault);
+    const analyzeSignature = buildAnalyzeSignature(trimmed, projectContext, latestStyle.toneDefault);
 
     try {
       if (!resolvedSessionId) {
-        resolvedSessionId = await createMemorySession(session.user.id, deriveChatTitle(trimmed));
+        resolvedSessionId = await createMemorySession(session.user.id, "Quick analysis");
         setSessionId(resolvedSessionId);
         setStoredSessionId(resolvedSessionId, session.user.id);
       }
 
-      const data = await generateResponse(trimmed, mode, resolvedSessionId);
-      const nextOutput =
-        String(data.verified_response || "").trim() ||
-        "I could not generate a response. Please try again.";
-
-      const fallbackTurn: HistoryItem = {
-        id: `${Date.now()}`,
-        input: trimmed,
-        normalizedInput: data.normalized_input || trimmed,
-        output: nextOutput,
-        score: typeof data.score === "number" ? data.score : 0,
-        confidence: typeof data.confidence === "number" ? data.confidence : 0,
-        tone: data.tone || "neutral",
-        reasoning: data.reasoning || "",
-        timestamp: Date.now(),
-      };
-
-      const refreshed = await fetchMemoryHistory(resolvedSessionId);
-      const nextTurns = toChronologicalTurns(refreshed);
-      const resolvedTurns = nextTurns.length > 0 ? nextTurns : [...turns, fallbackTurn];
-
-      setTurns(resolvedTurns);
-      setSelectedTurnId(turnIdentity(resolvedTurns[resolvedTurns.length - 1]));
-
-      const updatedSessions = upsertStoredChatSession(
-        {
-          sessionId: resolvedSessionId,
-          title: deriveChatTitle(trimmed),
-          preview: nextOutput.slice(0, 140),
-          updatedAt: Date.now(),
-        },
-        session.user.id,
+      const data = await generateResponse(
+        trimmed,
+        LAUNCH_BACKEND_MODE,
+        resolvedSessionId,
+        LAUNCH_INTENT,
+        latestStyle.toneDefault,
+        latestStyle,
+        LAUNCH_PLATFORM,
+        projectContext,
       );
-      setChatSessions(updatedSessions);
-    } catch (err) {
-      console.error(err);
-      setDraft(trimmed);
-      setError(err instanceof Error ? err.message : "Something went wrong while generating a response.");
+      setResult(mapApiResult(data, trimmed));
+      setLastAnalyzedSignature(analyzeSignature);
+      setRefineInstruction("");
+    } catch {
+      setResult({
+        rawInput: trimmed,
+        normalizedInput: trimmed,
+        output: trimmed,
+        decision: "MODIFY",
+        score: 70,
+        confidence: 70,
+        tone: styleMemory.toneDefault,
+        issues: [],
+        improvements: [],
+        insights: [],
+        clientPerspective: {
+          reaction: "neutral",
+          likelyReaction: "Recipient reaction is uncertain due to incomplete analysis.",
+          riskFactors: [],
+          suggestedAdjustment: "Add a clear value statement and one concrete next step.",
+        },
+        qualityChecks: [],
+        variations: [],
+        reasoning: "",
+      });
+      setLastAnalyzedSignature(analyzeSignature);
     } finally {
       setLoading(false);
-      setPendingPrompt("");
+    }
+  };
+
+  const handleRefine = async () => {
+    const instruction = refineInstruction.trim();
+    const baseInput = (result?.rawInput || draft).trim();
+
+    if (!instruction || !result || !baseInput || loading || !session) {
+      return;
+    }
+
+    setLoading(true);
+
+    let resolvedSessionId = sessionId;
+    const latestStyle = getStoredStyleMemory(session.user.id);
+    setStyleMemory(latestStyle);
+    setTone(latestStyle.toneDefault);
+
+    try {
+      if (!resolvedSessionId) {
+        resolvedSessionId = await createMemorySession(session.user.id, "Quick analysis");
+        setSessionId(resolvedSessionId);
+        setStoredSessionId(resolvedSessionId, session.user.id);
+      }
+
+      const data = await generateResponse(
+        baseInput,
+        LAUNCH_BACKEND_MODE,
+        resolvedSessionId,
+        LAUNCH_INTENT,
+        latestStyle.toneDefault,
+        latestStyle,
+        LAUNCH_PLATFORM,
+        projectContext,
+        instruction,
+        result.output,
+      );
+      setResult(mapApiResult(data, baseInput));
+      setRefineInstruction("");
+    } catch {
+      // Keep the previous result visible when refinement fails.
+    } finally {
+      setLoading(false);
     }
   };
 
   const handleComposerKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (event.key === "Enter" && !event.shiftKey) {
+    if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
       event.preventDefault();
-      void handleGenerate();
+      void handleAnalyze();
     }
   };
 
-  const filteredChats = chatSessions.filter((item) => {
-    const query = searchQuery.trim().toLowerCase();
-    if (!query) {
-      return true;
+  const canAnalyze = draft.trim().length >= 3 && !loading;
+  const canRefine = Boolean(result && refineInstruction.trim().length >= 3 && !loading);
+
+  useEffect(() => {
+    if (!autoFixMode || !session || loading) {
+      return;
     }
 
-    return [item.title, item.preview]
-      .filter((value): value is string => Boolean(value))
-      .some((value) => value.toLowerCase().includes(query));
-  });
+    const trimmed = draft.trim();
+    if (trimmed.length < 3) {
+      return;
+    }
 
-  const activeTurn =
-    turns.find((turn) => turnIdentity(turn) === selectedTurnId) ||
-    (turns.length > 0 ? turns[turns.length - 1] : null);
+    const latestStyle = getStoredStyleMemory(session.user.id);
+    const signature = buildAnalyzeSignature(trimmed, projectContext, latestStyle.toneDefault);
+    if (signature === lastAnalyzedSignature) {
+      return;
+    }
 
-  const canSend = draft.trim().length >= 3 && !loading;
+    const timeoutId = window.setTimeout(() => {
+      void handleAnalyze();
+    }, AUTO_FIX_DELAY_MS);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [autoFixMode, draft, projectContext, session, loading, lastAnalyzedSignature]);
 
   return (
     <main className={styles.page}>
       <div className={styles.layout}>
         <aside className={styles.sidebar}>
-          <div className={styles.sidebarTop}>
-            <div className={styles.brandRow}>
-              <span className={styles.brandMark}>V</span>
-              <div>
-                <p className={styles.brandTitle}>Verixa AI</p>
-                <p className={styles.brandSub}>Assistant</p>
-              </div>
-            </div>
-
-            <button type="button" className={styles.newChatButton} onClick={handleNewChat}>
-              + New chat
-            </button>
-
-            <label htmlFor="chat-search" className={styles.searchBox}>
-              <input
-                id="chat-search"
-                value={searchQuery}
-                onChange={(event) => setSearchQuery(event.target.value)}
-                placeholder="Search your chats"
-                className={styles.searchInput}
-              />
-            </label>
-
-            <div className={styles.chatList}>
-              {filteredChats.length === 0 ? (
-                <p className={styles.emptyChats}>No saved chats yet.</p>
-              ) : (
-                filteredChats.map((chat) => (
-                  <button
-                    key={chat.sessionId}
-                    type="button"
-                    onClick={() => handleSelectChat(chat.sessionId)}
-                    className={
-                      chat.sessionId === sessionId
-                        ? `${styles.chatItem} ${styles.chatItemActive}`
-                        : styles.chatItem
-                    }
-                  >
-                    <p className={styles.chatTitle}>{chat.title}</p>
-                    <p className={styles.chatPreview}>{chat.preview || "No preview yet"}</p>
-                    <p className={styles.chatTime}>{formatTime(chat.updatedAt)}</p>
-                  </button>
-                ))
-              )}
+          <div className={styles.brandRow}>
+            <span className={styles.brandMark}>V</span>
+            <div>
+              <p className={styles.brandTitle}>Verixa AI</p>
+              <p className={styles.brandSub}>Structured Response Studio</p>
             </div>
           </div>
+
+          <p className={styles.sidebarText}>
+            Pick intent, submit once, and review a structured analysis instead of chat bubbles.
+          </p>
 
           <ProfileDock
             session={session}
@@ -337,24 +546,10 @@ export default function Home() {
         <section className={styles.mainPanel}>
           <header className={styles.mainHeader}>
             <div>
-              <p className={styles.headerEyebrow}>Conversation</p>
-              <h1 className={styles.headerTitle}>Write naturally. Keep context automatically.</h1>
+              <p className={styles.headerEyebrow}>Smart Response Analysis</p>
+              <h1 className={styles.headerTitle}>Before you send it, Verixa fixes it.</h1>
             </div>
-
-            <label className={styles.modeSelectWrap}>
-              <span>Mode</span>
-              <select
-                value={mode}
-                onChange={(event) => setMode(event.target.value)}
-                className={styles.modeSelect}
-              >
-                {MODE_OPTIONS.map((option) => (
-                  <option key={option.key} value={option.key}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <p className={styles.launchModeBadge}>Launch Mode: Freelance (Upwork)</p>
           </header>
 
           {!authReady ? (
@@ -370,98 +565,134 @@ export default function Home() {
             </div>
           ) : (
             <>
-              <div ref={threadRef} className={styles.thread}>
-                {turns.length === 0 && !pendingPrompt ? (
-                  <div className={styles.emptyThread}>
-                    <h2>Start a proper conversation</h2>
-                    <p>
-                      Ask anything below. Your responses stay in this chat, so follow-ups keep context.
-                    </p>
-                  </div>
-                ) : null}
-
-                {turns.map((turn) => (
-                  <div key={turnIdentity(turn)} className={styles.turnBlock}>
-                    <article className={`${styles.message} ${styles.userMessage}`}>
-                      <p>{turn.input}</p>
-                    </article>
-
-                    <article
-                      className={`${styles.message} ${styles.assistantMessage}`}
-                      onClick={() => setSelectedTurnId(turnIdentity(turn))}
-                      role="button"
-                      tabIndex={0}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter" || event.key === " ") {
-                          event.preventDefault();
-                          setSelectedTurnId(turnIdentity(turn));
-                        }
-                      }}
-                    >
-                      <p>{turn.output}</p>
-                      <div className={styles.messageMeta}>
-                        <span>Score {Math.round(turn.score)}</span>
-                        <span>Conf {Math.round(turn.confidence || 0)}</span>
-                        <span>{turn.tone || "neutral"}</span>
-                      </div>
-                    </article>
-                  </div>
-                ))}
-
-                {pendingPrompt ? (
-                  <div className={styles.turnBlock}>
-                    <article className={`${styles.message} ${styles.userMessage}`}>
-                      <p>{pendingPrompt}</p>
-                    </article>
-                    <article className={`${styles.message} ${styles.assistantMessage}`}>
-                      <p className={styles.typing}>Generating response...</p>
-                    </article>
-                  </div>
-                ) : null}
-              </div>
-
-              {error ? <p className={styles.errorText}>{error}</p> : null}
+              <OnboardingModal
+                open={showOnboarding}
+                onTryDemo={handleOnboardingTryDemo}
+                onClose={handleOnboardingClose}
+              />
 
               <form
                 className={styles.composer}
                 onSubmit={(event) => {
                   event.preventDefault();
-                  void handleGenerate();
+                  void handleAnalyze();
                 }}
               >
+                <ToneSelector tone={tone} onChange={setTone} disabled={loading} />
+                <div className={styles.autoFixRow}>
+                  <label className={styles.autoFixToggle}>
+                    <input
+                      type="checkbox"
+                      checked={autoFixMode}
+                      onChange={(event) => setAutoFixMode(event.target.checked)}
+                      disabled={loading}
+                    />
+                    <span>Auto-Fix Mode</span>
+                  </label>
+                  <p className={styles.autoFixHint}>Auto-analyze 1.2s after typing stops.</p>
+                </div>
+                <div className={styles.contextPanel}>
+                  <label htmlFor="project-context" className={styles.contextLabel}>
+                    Project Context (Optional)
+                  </label>
+                  <textarea
+                    id="project-context"
+                    value={projectContext}
+                    onChange={(event) => setProjectContext(event.target.value)}
+                    placeholder="Client type: Startup SaaS\nProject scope: MVP landing + outbound email flow\nBudget: $3k-$5k"
+                    className={styles.contextInput}
+                    disabled={loading}
+                  />
+                </div>
                 <textarea
                   value={draft}
                   onChange={(event) => setDraft(event.target.value)}
                   onKeyDown={handleComposerKeyDown}
-                  placeholder="Message Verixa AI..."
+                  placeholder={ROTATING_INPUT_PLACEHOLDERS[placeholderIndex]}
                   className={styles.composerInput}
+                  disabled={loading}
                 />
-                <button type="submit" className={styles.sendButton} disabled={!canSend}>
-                  {loading ? "Generating..." : "Send"}
+                <button
+                  type="submit"
+                  className={styles.analyzeButton}
+                  disabled={!canAnalyze}
+                  aria-busy={loading}
+                >
+                  {loading ? "Fixing your message..." : "Fix My Message"}
                 </button>
               </form>
+
+              <p className={styles.hintText}>Ctrl/Cmd + Enter to run fast.</p>
+
+              <SavedResponsesPanel
+                items={savedResponses}
+                onUse={handleUseSavedResponse}
+                onRemove={handleRemoveSavedResponse}
+              />
+
+              {loading ? (
+                <LoadingState />
+              ) : result ? (
+                <motion.div
+                  className={styles.resultStack}
+                  initial={{ opacity: 0, y: 16 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.5, ease: "easeOut" }}
+                >
+                  <ScoreCard
+                    score={result.score}
+                    confidence={result.confidence}
+                    tone={result.tone}
+                    reasoning={result.reasoning}
+                    issues={result.issues}
+                  />
+                  <ResultPanel
+                    sourceText={result.rawInput}
+                    output={result.output}
+                    score={result.score}
+                    confidence={result.confidence}
+                    decision={result.decision}
+                    insightLines={result.insights}
+                    clientPerspective={result.clientPerspective}
+                    qualityChecks={result.qualityChecks}
+                    variations={result.variations}
+                    issues={result.issues}
+                    improvements={result.improvements}
+                    onSaveResponse={handleSaveResponse}
+                    onShareAnalysis={handleShareAnalysis}
+                  />
+                  <form
+                    className={styles.refinePanel}
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      void handleRefine();
+                    }}
+                  >
+                    <label htmlFor="refine-instruction" className={styles.refineLabel}>
+                      Refine this further
+                    </label>
+                    <div className={styles.refineRow}>
+                      <input
+                        id="refine-instruction"
+                        type="text"
+                        value={refineInstruction}
+                        onChange={(event) => setRefineInstruction(event.target.value)}
+                        placeholder="Example: Make this more direct and remove filler"
+                        className={styles.refineInput}
+                        disabled={loading}
+                      />
+                      <button type="submit" className={styles.refineButton} disabled={!canRefine}>
+                        {loading ? "Refining..." : "Rewrite with Instruction"}
+                      </button>
+                    </div>
+                  </form>
+                </motion.div>
+              ) : (
+                <EmptyState mode={LAUNCH_INTENT} onExampleClick={(example) => setDraft(example)} />
+              )}
             </>
           )}
         </section>
-
-        <aside className={styles.inspector}>
-          <p className={styles.inspectorLabel}>Chat details</p>
-          {activeTurn ? (
-            <div className={styles.inspectorCard}>
-              <p className={styles.inspectorTitle}>Latest analysis</p>
-              <p className={styles.inspectorValue}>Score {Math.round(activeTurn.score)}</p>
-              <p className={styles.inspectorValue}>
-                Confidence {Math.round(activeTurn.confidence || 0)}
-              </p>
-              <p className={styles.inspectorValue}>Tone {activeTurn.tone || "neutral"}</p>
-              <p className={styles.inspectorReasoning}>
-                {activeTurn.reasoning || "No reasoning provided."}
-              </p>
-            </div>
-          ) : (
-            <p className={styles.infoText}>No turn selected yet.</p>
-          )}
-        </aside>
       </div>
     </main>
   );

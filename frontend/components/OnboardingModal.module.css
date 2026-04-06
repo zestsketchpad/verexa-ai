@@ -1,0 +1,64 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  background: rgba(8, 10, 16, 0.72);
+  backdrop-filter: blur(6px);
+  display: grid;
+  place-items: center;
+  padding: 14px;
+}
+
+.modal {
+  width: min(560px, 100%);
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background:
+    radial-gradient(circle at top right, rgba(255, 255, 255, 0.08), transparent 36%),
+    linear-gradient(165deg, rgba(26, 28, 36, 0.96), rgba(14, 16, 22, 0.96));
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.45);
+  padding: 14px;
+  display: grid;
+  gap: 10px;
+}
+
+.hintText {
+  margin: 0;
+  color: #e4ecfa;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.primaryButton,
+.secondaryButton {
+  border-radius: 10px;
+  padding: 9px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.primaryButton {
+  border: 1px solid rgba(152, 224, 176, 0.4);
+  color: #0f1b13;
+  background: linear-gradient(130deg, #a6e8bc, #88d9a5);
+}
+
+.secondaryButton {
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  color: #d8e2f2;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+@media (max-width: 760px) {
+  .actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}

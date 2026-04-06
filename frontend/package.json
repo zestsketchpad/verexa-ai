@@ -14,9 +14,10 @@
     "@opennextjs/cloudflare": "^1.18.0",
     "@supabase/supabase-js": "^2.49.8",
     "framer-motion": "12.10.5",
-    "next": "^15.3.9",
+    "next": "^15.5.14",
     "react": "19.1.0",
-    "react-dom": "19.1.0"
+    "react-dom": "19.1.0",
+    "react-server-dom-webpack": "^19.1.0"
   },
   "devDependencies": {
     "@types/node": "22.15.2",

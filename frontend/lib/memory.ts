@@ -173,21 +173,52 @@ export async function createMemorySession(userId?: string, title?: string): Prom
       }),
     });
   } catch (error) {
-    if (error instanceof DOMException && error.name === "AbortError") {
-      throw new Error("Memory service timed out while creating session");
-    }
-    throw error;
+    // Memory service timed out - use generated session ID locally
+    console.warn("Memory service unavailable, using local session");
+    const localSessionId = `local_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    upsertStoredChatSession(
+      {
+        sessionId: localSessionId,
+        title: title?.trim() || "New chat",
+        preview: "",
+        updatedAt: Date.now(),
+      },
+      userId,
+    );
+    return localSessionId;
   }
 
   if (!response.ok) {
-    throw new Error("Failed to create memory session");
+    console.warn("Failed to create memory session, using local session");
+    const localSessionId = `local_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    upsertStoredChatSession(
+      {
+        sessionId: localSessionId,
+        title: title?.trim() || "New chat",
+        preview: "",
+        updatedAt: Date.now(),
+      },
+      userId,
+    );
+    return localSessionId;
   }
 
   const payload = (await response.json()) as { sessionId?: string };
   const sessionId = String(payload.sessionId || "").trim();
 
   if (!sessionId) {
-    throw new Error("Memory session response was invalid");
+    console.warn("Invalid memory session response, using local session");
+    const localSessionId = `local_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    upsertStoredChatSession(
+      {
+        sessionId: localSessionId,
+        title: title?.trim() || "New chat",
+        preview: "",
+        updatedAt: Date.now(),
+      },
+      userId,
+    );
+    return localSessionId;
   }
 
   storeSessionId(sessionId, userId);
@@ -227,13 +258,14 @@ export async function fetchMemoryHistory(sessionId: string): Promise<HistoryItem
   try {
     response = await fetchWithTimeout(`${memoryApiBaseUrl}/sessions/${resolvedSessionId}/history`);
   } catch (error) {
-    if (error instanceof DOMException && error.name === "AbortError") {
-      throw new Error("Memory history request timed out");
-    }
-    throw error;
+    // Memory service unavailable - return empty history (app will still work)
+    console.warn("Memory history fetch timed out, continuing without history");
+    return [];
   }
   if (!response.ok) {
-    throw new Error("Failed to load memory history");
+    // Memory service error - return empty history
+    console.warn("Failed to load memory history, continuing without history");
+    return [];
   }
 
   const payload = (await response.json()) as {

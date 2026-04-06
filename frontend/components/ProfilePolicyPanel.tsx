@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { User } from "@supabase/supabase-js";
+import { getStoredStyleMemory, setStoredStyleMemory } from "@/lib/styleMemory";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import styles from "./ProfilePolicyPanel.module.css";
 
@@ -16,6 +17,7 @@ type FormState = {
   goals: string;
   preferred_tone: string;
   response_style: string;
+  industry: string;
   memory_mode: string;
   factual_strictness: string;
 };
@@ -33,6 +35,7 @@ const defaultState: FormState = {
   goals: "",
   preferred_tone: "professional",
   response_style: "concise",
+  industry: "freelance",
   memory_mode: "persistent",
   factual_strictness: "strict",
 };
@@ -81,9 +84,18 @@ export default function ProfilePolicyPanel({ user }: ProfilePolicyPanelProps) {
           goals: data.goals || "",
           preferred_tone: data.preferred_tone || "professional",
           response_style: data.response_style || "concise",
+          industry: data.industry || getStoredStyleMemory(user.id).industry,
           memory_mode: data.memory_mode || "persistent",
           factual_strictness: data.factual_strictness || "strict",
         });
+      } else {
+        const savedStyle = getStoredStyleMemory(user.id);
+        setForm((current) => ({
+          ...current,
+          preferred_tone: savedStyle.toneDefault,
+          response_style: savedStyle.writingStyle,
+          industry: savedStyle.industry,
+        }));
       }
 
       setLoading(false);
@@ -117,17 +129,45 @@ export default function ProfilePolicyPanel({ user }: ProfilePolicyPanelProps) {
   const handleSave = async () => {
     if (!supabase) {
       setStatus("Supabase profile settings are not configured for this deployment yet.");
+      setStoredStyleMemory(
+        {
+          toneDefault:
+            form.preferred_tone === "friendly" || form.preferred_tone === "assertive"
+              ? form.preferred_tone
+              : "professional",
+          writingStyle: form.response_style === "detailed" ? "detailed" : "concise",
+          industry: form.industry === "dev" || form.industry === "design" ? form.industry : "freelance",
+        },
+        user.id,
+      );
       return;
     }
     setSaving(true);
     setStatus("");
     const profilesTable = supabase.from("user_profiles" as never) as any;
 
+    setStoredStyleMemory(
+      {
+        toneDefault:
+          form.preferred_tone === "friendly" || form.preferred_tone === "assertive"
+            ? form.preferred_tone
+            : "professional",
+        writingStyle: form.response_style === "detailed" ? "detailed" : "concise",
+        industry: form.industry === "dev" || form.industry === "design" ? form.industry : "freelance",
+      },
+      user.id,
+    );
+
     const { error } = await profilesTable.upsert(
       {
         id: user.id,
         email: user.email,
-        ...form,
+        full_name: form.full_name,
+        company: form.company,
+        role: form.role,
+        goals: form.goals,
+        preferred_tone: form.preferred_tone,
+        response_style: form.response_style,
         updated_at: new Date().toISOString(),
       },
       { onConflict: "id" },
@@ -216,8 +256,7 @@ export default function ProfilePolicyPanel({ user }: ProfilePolicyPanelProps) {
           >
             <option value="professional">Professional</option>
             <option value="friendly">Friendly</option>
-            <option value="direct">Direct</option>
-            <option value="persuasive">Persuasive</option>
+            <option value="assertive">Assertive</option>
           </select>
         </div>
 
@@ -232,6 +271,20 @@ export default function ProfilePolicyPanel({ user }: ProfilePolicyPanelProps) {
             <option value="concise">Concise</option>
             <option value="balanced">Balanced</option>
             <option value="detailed">Detailed</option>
+          </select>
+        </div>
+
+        <div className={styles.field}>
+          <label className={styles.label}>Industry</label>
+          <select
+            value={form.industry}
+            onChange={(event) => updateField("industry", event.target.value)}
+            className={styles.select}
+            disabled={loading}
+          >
+            <option value="freelance">Freelance</option>
+            <option value="dev">Development</option>
+            <option value="design">Design</option>
           </select>
         </div>
 

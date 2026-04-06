@@ -6,20 +6,156 @@
   padding: 18px 20px;
 }
 
-.line {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px;
-  color: #c0c7d2;
-  font-size: 14px;
+.cardTitle {
+  margin: 0 0 12px 0;
+  color: #eaf0fc;
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  opacity: 0.8;
 }
 
-.strong {
-  color: white;
+.sendConfidenceWrap {
+  margin-bottom: 14px;
+  display: grid;
+  gap: 7px;
+}
+
+.sendHeaderRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.sendLabel {
+  color: #dce5f7;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.sendScore {
+  color: #f0f5ff;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.progressTrack {
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.progressFill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.35s ease;
+}
+
+.sendStatus {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.explainWrap {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  padding: 7px 9px;
+}
+
+.explainSummary {
+  cursor: pointer;
+  color: #cfdbf1;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.explainText {
+  margin: 8px 0 2px;
+  color: #b7c4da;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.fillSafe {
+  background: linear-gradient(90deg, #98e0b0, #7ad39a);
+}
+
+.fillReview {
+  background: linear-gradient(90deg, #ffdca0, #ffbf66);
+}
+
+.fillRisky {
+  background: linear-gradient(90deg, #ff9c9c, #ff7575);
+}
+
+.statusSafe {
+  color: #98e0b0;
+}
+
+.statusReview {
+  color: #ffdca0;
+}
+
+.statusRisky {
+  color: #ff9c9c;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.metric {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.label {
+  color: #909ab5;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.value {
+  color: #c0c7d2;
+  font-size: 16px;
   font-weight: 600;
 }
 
-.dot {
-  color: #525965;
+.riskLow {
+  color: #98e0b0;
+}
+
+.riskMedium {
+  color: #ffdca0;
+}
+
+.riskHigh {
+  color: #ff9c9c;
+}
+
+.clarityGood {
+  color: #98e0b0;
+}
+
+.clarityNeedsWork {
+  color: #ffdca0;
+}
+
+@media (max-width: 760px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
 }

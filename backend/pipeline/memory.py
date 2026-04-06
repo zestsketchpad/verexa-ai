@@ -126,6 +126,54 @@ def fetch_profile_facts(session_id: str) -> list[dict[str, Any]]:
     return facts if isinstance(facts, list) else []
 
 
+def resolve_style_preferences(session_id: str, request_style: dict[str, Any] | None = None) -> dict[str, str]:
+    resolved = {
+        "tone_default": "professional",
+        "writing_style": "concise",
+        "industry": "freelance",
+    }
+
+    request_style = request_style or {}
+    tone = str(request_style.get("tone_default", "")).strip().lower()
+    writing_style = str(request_style.get("writing_style", "")).strip().lower()
+    industry = str(request_style.get("industry", "")).strip().lower()
+
+    if tone in {"professional", "friendly", "assertive"}:
+        resolved["tone_default"] = tone
+    if writing_style in {"concise", "detailed"}:
+        resolved["writing_style"] = writing_style
+    if industry in {"freelance", "dev", "design"}:
+        resolved["industry"] = industry
+
+    facts = fetch_profile_facts(session_id)
+    if not facts:
+        return resolved
+
+    fact_map: dict[str, str] = {}
+    for fact in facts:
+        key = str(fact.get("fact_key", "")).strip().lower()
+        value = str(fact.get("fact_value", "")).strip().lower()
+        if key and value and key not in fact_map:
+            fact_map[key] = value
+
+    if resolved["tone_default"] == "professional":
+        fact_tone = fact_map.get("style_tone_default", "")
+        if fact_tone in {"professional", "friendly", "assertive"}:
+            resolved["tone_default"] = fact_tone
+
+    if resolved["writing_style"] == "concise":
+        fact_style = fact_map.get("style_writing_style", "")
+        if fact_style in {"concise", "detailed"}:
+            resolved["writing_style"] = fact_style
+
+    if resolved["industry"] == "freelance":
+        fact_industry = fact_map.get("style_industry", "")
+        if fact_industry in {"freelance", "dev", "design"}:
+            resolved["industry"] = fact_industry
+
+    return resolved
+
+
 def search_memory_items(session_id: str, query: str) -> list[dict[str, Any]]:
     worker_url = get_memory_worker_url()
     resolved_session_id = str(session_id or "").strip()
@@ -268,6 +316,41 @@ def extract_profile_facts(payload: dict[str, Any]) -> list[dict[str, Any]]:
                     "source": "session_message",
                 }
             )
+
+    style_preferences = payload.get("style_preferences") if isinstance(payload.get("style_preferences"), dict) else {}
+    style_tone = str(style_preferences.get("tone_default", "")).strip().lower()
+    style_writing = str(style_preferences.get("writing_style", "")).strip().lower()
+    style_industry = str(style_preferences.get("industry", "")).strip().lower()
+
+    if style_tone in {"professional", "friendly", "assertive"}:
+        facts.append(
+            {
+                "key": "style_tone_default",
+                "value": style_tone,
+                "confidence": 98,
+                "source": "profile_style_settings",
+            }
+        )
+
+    if style_writing in {"concise", "detailed"}:
+        facts.append(
+            {
+                "key": "style_writing_style",
+                "value": style_writing,
+                "confidence": 98,
+                "source": "profile_style_settings",
+            }
+        )
+
+    if style_industry in {"freelance", "dev", "design"}:
+        facts.append(
+            {
+                "key": "style_industry",
+                "value": style_industry,
+                "confidence": 98,
+                "source": "profile_style_settings",
+            }
+        )
 
     return facts
 
